@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   getInstantReframe,
   generatePermissionSlip,
@@ -11,55 +11,84 @@ import {
 } from '@/services/aiService';
 import { ChatMessage } from '@/types';
 
-// Hook for Instant Reframe chat with stuck point awareness
+// Hook for intelligent chat with Gabby - context-aware and versatile
 export function useInstantReframe(stuckPoint?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Use ref to always have access to latest messages in the callback
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
+
   const sendMessage = useCallback(async (userMessage: string, userStuckPoint?: string) => {
+    // Validate input
+    const trimmedMessage = userMessage.trim();
+    if (!trimmedMessage) {
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
-    // Add user message
+    // Create user message
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}`,
       role: 'user',
-      content: userMessage,
+      content: trimmedMessage,
       timestamp: new Date().toISOString(),
     };
+
+    // Get current messages for context BEFORE adding the new one
+    const currentMessages = messagesRef.current;
+
+    // Add user message to state
     setMessages((prev) => [...prev, userMsg]);
 
     try {
       // Use provided stuck point or default
       const activeStuckPoint = userStuckPoint || stuckPoint;
 
-      // Get AI response with stuck point context
-      const response = messages.length === 0
-        ? await getInstantReframe(userMessage, activeStuckPoint)
-        : await continueConversation(messages, userMessage, activeStuckPoint);
+      // Choose the appropriate AI function based on conversation state
+      // First message: use getInstantReframe (handles greetings, questions, fears appropriately)
+      // Subsequent messages: use continueConversation with full context
+      const response = currentMessages.length === 0
+        ? await getInstantReframe(trimmedMessage, activeStuckPoint)
+        : await continueConversation(
+            // Pass all current messages for full context
+            currentMessages.map(m => ({ role: m.role, content: m.content })),
+            trimmedMessage,
+            activeStuckPoint
+          );
 
-      if (response.success) {
+      if (response.success && response.message) {
         const assistantMsg: ChatMessage = {
-          id: (Date.now() + 1).toString(),
+          id: `assistant-${Date.now()}`,
           role: 'assistant',
           content: response.message,
           timestamp: new Date().toISOString(),
         };
         setMessages((prev) => [...prev, assistantMsg]);
       } else {
-        setError(response.error || 'Something went wrong');
+        setError(response.error || 'Unable to get a response. Please try again.');
       }
     } catch (err) {
-      setError('Failed to get response. Please try again.');
+      console.error('Chat error:', err);
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [messages, stuckPoint]);
+  }, [stuckPoint]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
+    messagesRef.current = [];
     setError(null);
+  }, []);
+
+  // Get the last user message for generating permission slips/actions
+  const getLastUserMessage = useCallback(() => {
+    return messagesRef.current.filter(m => m.role === 'user').pop()?.content || '';
   }, []);
 
   return {
@@ -68,6 +97,7 @@ export function useInstantReframe(stuckPoint?: string) {
     error,
     sendMessage,
     clearChat,
+    getLastUserMessage,
   };
 }
 

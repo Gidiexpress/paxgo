@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -31,18 +31,25 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isRecordingRef = useRef(false); // Track recording state without re-renders
 
-  const { transcribeAudio, isLoading: isTranscribing, error } = useAudioTranscription({
+  const { transcribeAudio, isLoading: isTranscribing, error, reset: resetTranscription } = useAudioTranscription({
     onSuccess: (text) => {
       if (text && text.trim()) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onTranscriptionComplete(text.trim());
       }
     },
     onError: (err) => {
       console.error('Transcription error:', err);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      // Only show error haptic for actual transcription failures, not initialization
+      if (isRecordingRef.current === false) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      }
     },
   });
 
@@ -53,16 +60,53 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   const waveScale2 = useSharedValue(1);
   const waveScale3 = useSharedValue(1);
 
+  // Initialize audio system on mount
   useEffect(() => {
-    checkPermissions();
+    initializeAudio();
     return () => {
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync();
-      }
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
+      cleanupRecording();
     };
+  }, []);
+
+  // Pre-initialize audio system to avoid first-click delays
+  const initializeAudio = useCallback(async () => {
+    try {
+      // Check permissions first
+      const { status } = await Audio.requestPermissionsAsync();
+      setPermissionStatus(status === 'granted' ? 'granted' : 'denied');
+
+      if (status === 'granted') {
+        // Pre-configure audio mode to avoid delays on first recording
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        setAudioReady(true);
+      }
+    } catch (err) {
+      console.warn('Audio initialization warning:', err);
+      // Don't show error to user - just allow manual retry
+      setPermissionStatus('undetermined');
+    }
+  }, []);
+
+  // Cleanup function for recording resources
+  const cleanupRecording = useCallback(async () => {
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    if (recordingRef.current) {
+      try {
+        const status = await recordingRef.current.getStatusAsync();
+        if (status.isRecording) {
+          await recordingRef.current.stopAndUnloadAsync();
+        }
+      } catch {
+        // Recording may already be unloaded
+      }
+      recordingRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
@@ -115,32 +159,56 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
     }
   }, [isRecording]);
 
-  const checkPermissions = async () => {
-    const { status } = await Audio.requestPermissionsAsync();
-    setPermissionStatus(status === 'granted' ? 'granted' : 'denied');
-  };
-
   const startRecording = async () => {
-    if (permissionStatus !== 'granted') {
-      await checkPermissions();
+    // Prevent double-starts
+    if (isRecordingRef.current || isInitializing) {
       return;
     }
 
+    // Check permissions if not already granted
+    if (permissionStatus !== 'granted') {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        setPermissionStatus('denied');
+        return;
+      }
+      setPermissionStatus('granted');
+    }
+
+    setIsInitializing(true);
+
     try {
+      // Provide immediate haptic feedback
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      // Ensure audio mode is set (may already be set from initialization)
+      if (!audioReady) {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+      }
 
+      // Clean up any existing recording first
+      if (recordingRef.current) {
+        try {
+          await recordingRef.current.stopAndUnloadAsync();
+        } catch {
+          // Ignore cleanup errors
+        }
+        recordingRef.current = null;
+      }
+
+      // Create and start new recording
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
 
       recordingRef.current = recording;
+      isRecordingRef.current = true;
       setIsRecording(true);
       setRecordingDuration(0);
+      setIsInitializing(false);
 
       // Start duration counter
       durationIntervalRef.current = setInterval(() => {
@@ -148,43 +216,88 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
       }, 1000);
 
     } catch (err) {
-      console.error('Failed to start recording:', err);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      console.warn('Recording setup issue:', err);
+      setIsInitializing(false);
+      isRecordingRef.current = false;
+      setIsRecording(false);
+
+      // Provide subtle feedback but don't alarm the user
+      // The recording simply didn't start - they can try again
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      // Reset audio system for next attempt
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        setAudioReady(true);
+      } catch {
+        // Silent fail - will retry on next press
+      }
     }
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
+    // Only proceed if we're actually recording
+    if (!isRecordingRef.current && !recordingRef.current) {
+      setIsInitializing(false);
+      return;
+    }
+
+    const currentDuration = recordingDuration;
 
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
+      // Stop duration counter
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = null;
       }
 
+      // Update state
+      isRecordingRef.current = false;
       setIsRecording(false);
+      setIsInitializing(false);
 
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      // Get and process recording
+      if (recordingRef.current) {
+        try {
+          const status = await recordingRef.current.getStatusAsync();
+          if (status.isRecording) {
+            await recordingRef.current.stopAndUnloadAsync();
+          }
+        } catch {
+          // Recording may have issues, but try to get URI anyway
+        }
 
-      if (uri && recordingDuration >= 1) {
-        // Transcribe the audio
-        await transcribeAudio({ audioUri: uri, language: 'en' });
+        const uri = recordingRef.current.getURI();
+        recordingRef.current = null;
+
+        // Only transcribe if we have a valid recording of sufficient length
+        if (uri && currentDuration >= 1) {
+          // Reset any previous transcription errors before new attempt
+          resetTranscription?.();
+          await transcribeAudio({ audioUri: uri, language: 'en' });
+        } else if (currentDuration < 1) {
+          // Recording was too short - subtle feedback
+          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
       }
 
       setRecordingDuration(0);
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
+      // Keep audio mode ready for next recording (smoother UX)
+      // Only reset if we need to play audio elsewhere
 
     } catch (err) {
-      console.error('Failed to stop recording:', err);
+      console.warn('Recording stop issue:', err);
+      isRecordingRef.current = false;
       setIsRecording(false);
+      setIsInitializing(false);
       setRecordingDuration(0);
+      recordingRef.current = null;
     }
   };
 
@@ -217,13 +330,28 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
     opacity: 1 - (waveScale3.value - 1) / 0.8,
   }));
 
+  // Show transcribing state
   if (isTranscribing) {
     return (
       <View style={styles.container}>
         <View style={styles.transcribingContainer}>
           <ActivityIndicator size="small" color={colors.boldTerracotta} />
-          <Text style={styles.transcribingText}>Transcribing...</Text>
+          <Text style={styles.transcribingText}>Listening...</Text>
         </View>
+      </View>
+    );
+  }
+
+  // Show initializing state (brief, during first press)
+  if (isInitializing && !isRecording) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.buttonWrapper}>
+          <View style={[styles.micButton, styles.micButtonInitializing]}>
+            <ActivityIndicator size="small" color={colors.boldTerracotta} />
+          </View>
+        </View>
+        <Text style={styles.hintText}>Preparing...</Text>
       </View>
     );
   }
@@ -236,6 +364,8 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
         disabled={disabled || permissionStatus === 'denied'}
         activeOpacity={0.9}
         style={styles.buttonWrapper}
+        delayPressIn={0}
+        delayPressOut={0}
       >
         {/* Animated waves */}
         {isRecording && (
@@ -264,6 +394,7 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
 
       {isRecording && (
         <View style={styles.durationContainer}>
+          <Animated.View style={styles.recordingIndicatorPulse} />
           <View style={styles.recordingIndicator} />
           <Text style={styles.durationText}>{formatDuration(recordingDuration)}</Text>
         </View>
@@ -272,7 +403,7 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
       {!isRecording && (
         <Text style={styles.hintText}>
           {permissionStatus === 'denied'
-            ? 'Microphone access denied'
+            ? 'Tap to enable mic'
             : 'Hold to speak'}
         </Text>
       )}
@@ -326,6 +457,10 @@ const styles = StyleSheet.create({
     borderColor: colors.gray300,
     opacity: 0.5,
   },
+  micButtonInitializing: {
+    backgroundColor: colors.warmCream,
+    borderColor: colors.gray200,
+  },
   micIcon: {
     fontSize: 20,
   },
@@ -340,6 +475,15 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.boldTerracotta,
+  },
+  recordingIndicatorPulse: {
+    position: 'absolute',
+    left: 0,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.boldTerracotta,
+    opacity: 0.4,
   },
   durationText: {
     fontFamily: typography.fontFamily.bodyMedium,

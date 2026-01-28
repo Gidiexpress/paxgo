@@ -1,5 +1,106 @@
 import { generateText } from '@fastshot/ai';
 
+// Input type detection for contextual responses
+export type InputType = 'greeting' | 'question' | 'fear' | 'casual' | 'followup' | 'gratitude';
+
+// Detect the type of user input to provide appropriate responses
+function detectInputType(message: string, conversationLength: number): InputType {
+  const lowerMessage = message.toLowerCase().trim();
+
+  // Greeting patterns
+  const greetingPatterns = [
+    /^(hi|hey|hello|hola|howdy|yo|sup|hiya|heya|greetings)/i,
+    /^good\s*(morning|afternoon|evening|night)/i,
+    /^what'?s\s*up/i,
+    /^how\s*(are|r)\s*(you|u|ya)/i,
+  ];
+
+  // Gratitude patterns
+  const gratitudePatterns = [
+    /^(thanks|thank\s*you|thx|ty|appreciate|grateful)/i,
+    /that\s*(helps|helped|was\s*helpful)/i,
+    /you'?re\s*(the\s*best|awesome|amazing|great)/i,
+  ];
+
+  // Question patterns (general questions, not fear-based)
+  const questionPatterns = [
+    /^(what|how|why|when|where|who|can\s*you|could\s*you|tell\s*me|explain)/i,
+    /\?$/,
+  ];
+
+  // Fear/doubt patterns (words indicating struggle, fear, doubt)
+  const fearPatterns = [
+    /\b(afraid|scared|fear|worry|worried|anxious|anxiety|nervous)\b/i,
+    /\b(can'?t|cannot|unable|impossible|never|won'?t)\b/i,
+    /\b(too\s*(old|young|late|early|scared|nervous|stupid|dumb))\b/i,
+    /\b(not\s*(good|smart|capable|ready|qualified|worthy)\s*enough)\b/i,
+    /\b(stuck|trapped|lost|confused|overwhelmed|hopeless)\b/i,
+    /\b(doubt|uncertain|unsure|hesitant)\b/i,
+    /\b(failure|fail|failing|failed)\b/i,
+    /\b(shouldn'?t|mustn'?t)\b/i,
+    /\b(what\s*if\s*(i|it)\s*(fail|don'?t|can'?t|doesn'?t))/i,
+    /\b(imposter|fraud|fake)\b/i,
+  ];
+
+  // Check gratitude first
+  if (gratitudePatterns.some(pattern => pattern.test(lowerMessage))) {
+    return 'gratitude';
+  }
+
+  // Check greetings (only if short and at conversation start)
+  if (lowerMessage.length < 50 && greetingPatterns.some(pattern => pattern.test(lowerMessage))) {
+    return 'greeting';
+  }
+
+  // Check for fear/doubt language
+  if (fearPatterns.some(pattern => pattern.test(lowerMessage))) {
+    return 'fear';
+  }
+
+  // Check if it's a general question
+  if (questionPatterns.some(pattern => pattern.test(lowerMessage))) {
+    return 'question';
+  }
+
+  // If in ongoing conversation, it's likely a followup
+  if (conversationLength > 0) {
+    return 'followup';
+  }
+
+  // Default to casual for short, non-fear messages
+  return 'casual';
+}
+
+// Get response instructions based on input type
+function getResponseInstructions(inputType: InputType, messageLength: number): string {
+  const brevityNote = messageLength < 30
+    ? '\n\nIMPORTANT: The user sent a brief message, so keep your response equally brief (1-2 sentences max). Match their energy.'
+    : messageLength > 200
+      ? '\n\nIMPORTANT: The user shared a lot, so take time to acknowledge the depth of what they shared (2-4 sentences).'
+      : '';
+
+  switch (inputType) {
+    case 'greeting':
+      return `The user is greeting you. Respond warmly and naturally like a friend would. Keep it brief (1-2 sentences). You might ask what's on their mind or what brought them here today. Do NOT launch into coaching mode or ask heavy questions yet.${brevityNote}`;
+
+    case 'gratitude':
+      return `The user is expressing gratitude. Acknowledge it warmly and briefly. You might express that you're glad to be helpful, or gently ask if there's anything else they'd like to explore.${brevityNote}`;
+
+    case 'question':
+      return `The user is asking a question. Answer it helpfully and accurately while maintaining your warm, supportive persona. If it relates to personal growth, you can gently weave in an empowering perspective, but focus primarily on answering their actual question. Do NOT treat this as a fear to reframe unless it clearly is one.${brevityNote}`;
+
+    case 'fear':
+      return `The user is expressing a fear, doubt, or limiting belief. This is where your cognitive reframing skills shine. Acknowledge their feeling first, then offer a sophisticated reframe. If appropriate, you can suggest turning this into a bold move.${brevityNote}`;
+
+    case 'followup':
+      return `This is a continuation of the conversation. Stay contextual to what was discussed. If they're building on a previous topic, continue naturally. If they're shifting topics, follow their lead gracefully.${brevityNote}`;
+
+    case 'casual':
+    default:
+      return `The user is making a casual remark or sharing something. Respond naturally and warmly. Look for opportunities to understand them better or gently guide toward what matters to them, but don't force a coaching moment if it's not appropriate.${brevityNote}`;
+  }
+}
+
 // Cognitive reframing techniques tailored to each stuck point
 const STUCK_POINT_TECHNIQUES: Record<string, string> = {
   career: `
@@ -59,40 +160,47 @@ COGNITIVE TECHNIQUES FOR LEARNING:
 - Challenge "Expert Myth": Start as a student. Everyone you admire did too.`,
 };
 
-// Sophisticated Gabby persona - Premium mindset coach
-const GABBY_SYSTEM_PROMPT = `You are Gabby, an elite mindset coach with the warmth of a trusted confidante and the precision of a cognitive behavioral therapist. Your communication style embodies:
+// Sophisticated Gabby persona - Premium mindset coach AND versatile assistant
+const GABBY_SYSTEM_PROMPT = `You are Gabby, a versatile AI assistant and mindset coach in the Paxgo app. You combine the warmth of a trusted friend with the insight of a skilled coach.
+
+YOUR CORE IDENTITY:
+- You're a helpful, knowledgeable assistant who can answer questions on any topic
+- You're also a mindset coach who helps users overcome fears and take "Bold Moves" toward their dreams
+- You adapt your tone and depth to match the user's energy and needs
 
 VOICE & TONE:
-- Sophisticated yet approachable—like a wise friend who happens to have a psychology degree
-- Deeply empathetic without being patronizing—you honor their feelings while gently expanding their perspective
-- Luxuriously unhurried—your responses feel like exhaling into a cashmere blanket
-- Subtly affirming—you see their strength even when they can't
+- Sophisticated yet approachable—like a wise, well-traveled friend
+- Warm and genuine—never robotic or overly formal
+- Adaptable—brief when they're brief, more detailed when they share more
+- Subtly empowering—you see their potential even when they doubt themselves
 
-SIGNATURE PHRASES:
-- "I hear the weight behind those words..."
+RESPONSE FLEXIBILITY:
+- For greetings: Be warm and natural, like greeting a friend. Keep it light.
+- For questions: Answer helpfully and accurately. You can weave in encouragement naturally, but focus on being useful.
+- For fears/doubts: This is where your coaching shines—validate first, then gently reframe.
+- For casual chat: Be conversational and present. Not everything needs to be a coaching moment.
+- For gratitude: Accept it gracefully and warmly.
+
+SIGNATURE TOUCHES (use sparingly, not in every message):
+- "I hear you..."
 - "Here's what I'm noticing..."
-- "Let's reframe this together..."
-- "The truth you might be ready to hear..."
-- "What if we considered..."
+- "What if we looked at it this way..."
+- A single emoji when it adds warmth (✨ 🌟 💫)
 
-COMMUNICATION RULES:
-- ALWAYS acknowledge their emotion first—validation before transformation
-- Use elegant, evocative language that feels premium and intentional
-- Keep responses to 3-4 thoughtful sentences maximum
-- End with either a gentle reframe OR an empowering observation—never both
-- Use ONE emoji maximum, only when it adds warmth (✨ 🌟 💫 preferred)
-- Never use exclamation marks in excess—one per message maximum
-
-COGNITIVE REFRAMING APPROACH:
-1. REFLECT: Mirror their emotion to show you truly heard them
-2. REFRAME: Offer a sophisticated alternative perspective
-3. REDIRECT: Point toward possibility without toxic positivity
+CRITICAL RULES:
+1. MATCH THEIR ENERGY: Short message? Short response. Detailed share? Thoughtful acknowledgment.
+2. DON'T OVER-COACH: Not every message needs a reframe or life lesson. Sometimes "That sounds exciting!" is perfect.
+3. BE GENUINELY HELPFUL: If they ask a question, answer it well before adding any coaching angle.
+4. STAY PRESENT: Respond to what they actually said, not what you assume they meant.
+5. ONE THING AT A TIME: Don't overwhelm with multiple insights or questions.
+6. NO EXCESS EXCLAMATION MARKS: One per message maximum.
+7. AVOID CLICHÉS: Be fresh and specific, not generic and hollow.
 
 You are NOT:
-- A cheerleader who dismisses real challenges
+- A therapist (don't diagnose or treat mental health conditions)
 - Preachy or lecturing
-- Using clichés or hollow affirmations
-- Overwhelming with too many insights at once`;
+- Assuming everything is a crisis or fear to address
+- Ignoring what they actually said to push your coaching agenda`;
 
 const getStuckPointContext = (stuckPoint?: string): string => {
   if (!stuckPoint) return '';
@@ -196,29 +304,56 @@ export interface MicroActionData {
   difficultyLevel?: number;
 }
 
-// Instant Reframe - Sophisticated Gabby-style response with stuck point awareness
-export async function getInstantReframe(fear: string, stuckPoint?: string): Promise<ReframeResponse> {
+// Intelligent first message response - contextually aware
+export async function getInstantReframe(userMessage: string, stuckPoint?: string): Promise<ReframeResponse> {
   try {
-    const stuckPointContext = getStuckPointContext(stuckPoint);
-    const prompt = `${GABBY_SYSTEM_PROMPT}${stuckPointContext}
+    const inputType = detectInputType(userMessage, 0);
+    const responseInstructions = getResponseInstructions(inputType, userMessage.length);
+    const stuckPointContext = inputType === 'fear' ? getStuckPointContext(stuckPoint) : '';
 
-User's fear or concern: "${fear}"
+    const prompt = `${GABBY_SYSTEM_PROMPT}
 
-Respond as Gabby with a warm, sophisticated reframe that applies cognitive techniques relevant to their area of focus:`;
+CONTEXT: This is the user's FIRST message to you. They may be greeting you, asking a question, sharing a fear, or just chatting.
+${stuckPointContext}
+
+${responseInstructions}
+
+User's message: "${userMessage}"
+
+Respond as Gabby:`;
 
     const response = await generateText({ prompt });
 
     return {
       success: true,
-      message: response || "I hear you, and what you're feeling is real. Let's hold space for this together, and then gently explore what might be waiting on the other side of this fear. ✨",
+      message: response || getContextualFallback(inputType),
     };
   } catch (error) {
-    console.error('Reframe error:', error);
+    console.error('Response error:', error);
     return {
       success: false,
       message: '',
-      error: 'Unable to generate reframe. Please try again.',
+      error: 'Unable to generate response. Please try again.',
     };
+  }
+}
+
+// Contextual fallback messages based on input type
+function getContextualFallback(inputType: InputType): string {
+  switch (inputType) {
+    case 'greeting':
+      return "Hey there! 👋 Great to connect with you. What's on your mind today?";
+    case 'gratitude':
+      return "You're so welcome! I'm here whenever you need me. ✨";
+    case 'question':
+      return "That's a great question! Let me think about that for you...";
+    case 'fear':
+      return "I hear you, and what you're feeling is real. Let's hold space for this together. ✨";
+    case 'followup':
+      return "I'm with you. Tell me more about what you're thinking.";
+    case 'casual':
+    default:
+      return "I'm here and listening. What would you like to explore together?";
   }
 }
 
@@ -340,35 +475,47 @@ Generate micro-actions JSON array that feel luxurious and intentional:`;
   }
 }
 
-// Continue conversation with context and stuck point awareness
+// Continue conversation with context, memory, and intelligent response
 export async function continueConversation(
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   newMessage: string,
   stuckPoint?: string
 ): Promise<ReframeResponse> {
   try {
-    const stuckPointContext = getStuckPointContext(stuckPoint);
+    const inputType = detectInputType(newMessage, messages.length);
+    const responseInstructions = getResponseInstructions(inputType, newMessage.length);
+    const stuckPointContext = inputType === 'fear' ? getStuckPointContext(stuckPoint) : '';
 
-    // Build conversation context
+    // Build conversation context with better formatting
     const conversationContext = messages
-      .slice(-6) // Keep last 6 messages for context
+      .slice(-8) // Keep last 8 messages for better context
       .map((m) => `${m.role === 'user' ? 'User' : 'Gabby'}: ${m.content}`)
-      .join('\n');
+      .join('\n\n');
 
-    const prompt = `${GABBY_SYSTEM_PROMPT}${stuckPointContext}
+    // Analyze conversation for context
+    const conversationSummary = analyzeConversationContext(messages);
 
-Previous conversation:
+    const prompt = `${GABBY_SYSTEM_PROMPT}
+
+CONVERSATION CONTEXT:
+${conversationSummary}
+${stuckPointContext}
+
+PREVIOUS MESSAGES:
 ${conversationContext}
+
+CURRENT MESSAGE ANALYSIS:
+${responseInstructions}
 
 User: ${newMessage}
 
-Gabby (respond with sophisticated empathy and relevant cognitive reframing):`;
+Gabby (respond naturally, staying contextual to the conversation flow):`;
 
     const response = await generateText({ prompt });
 
     return {
       success: true,
-      message: response || "I'm holding space for you in this moment. Let's breathe through this together. ✨",
+      message: response || getContextualFallback(inputType),
     };
   } catch (error) {
     console.error('Conversation error:', error);
@@ -378,6 +525,34 @@ Gabby (respond with sophisticated empathy and relevant cognitive reframing):`;
       error: 'Unable to continue conversation. Please try again.',
     };
   }
+}
+
+// Analyze conversation to extract context for better responses
+function analyzeConversationContext(messages: Array<{ role: 'user' | 'assistant'; content: string }>): string {
+  if (messages.length === 0) return 'This is a new conversation.';
+
+  const userMessages = messages.filter(m => m.role === 'user');
+  const messageCount = messages.length;
+
+  // Check if user has shared any fears/concerns
+  const hasFearContent = userMessages.some(m =>
+    /\b(afraid|scared|fear|worry|can't|stuck|doubt|nervous|anxious)\b/i.test(m.content)
+  );
+
+  // Check conversation depth
+  const isDeepConversation = messageCount > 4;
+
+  let context = `Conversation depth: ${messageCount} messages exchanged.`;
+
+  if (hasFearContent) {
+    context += ' User has shared personal concerns or fears - be sensitive to this context.';
+  }
+
+  if (isDeepConversation) {
+    context += ' This is an ongoing conversation - maintain continuity and remember what was discussed.';
+  }
+
+  return context;
 }
 
 // Generate a variety of permission slip template styles
