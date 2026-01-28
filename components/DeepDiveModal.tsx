@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,13 +18,18 @@ import Animated, {
   withSpring,
   withTiming,
   withSequence,
+  withDelay,
+  withRepeat,
   FadeIn,
   FadeInUp,
+  FadeInDown,
   FadeOut,
   SlideInDown,
   SlideOutDown,
+  ZoomIn,
   Easing,
   runOnJS,
+  interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTextGeneration } from '@fastshot/ai';
@@ -53,28 +59,75 @@ function TinyStepCard({ step, isActive, onComplete, index }: TinyStepCardProps) 
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0);
   const progressWidth = useSharedValue(0);
+  const buttonScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(0);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     if (isActive) {
-      glowOpacity.value = withSequence(
-        withTiming(0.3, { duration: 500 }),
-        withTiming(0.15, { duration: 500 })
+      // Animated glow pulse
+      glowOpacity.value = withRepeat(
+        withSequence(
+          withTiming(0.25, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+      // Button pulse hint
+      pulseOpacity.value = withDelay(
+        2000,
+        withRepeat(
+          withSequence(
+            withTiming(0.3, { duration: 800 }),
+            withTiming(0, { duration: 800 })
+          ),
+          3,
+          true
+        )
       );
     }
   }, [isActive]);
 
   const handleComplete = async () => {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    scale.value = withSequence(
-      withSpring(1.05, { damping: 10 }),
-      withSpring(1)
-    );
-    progressWidth.value = withTiming(100, { duration: 300, easing: Easing.out(Easing.ease) });
+    if (isCompleting) return;
+    setIsCompleting(true);
 
-    // Small delay for animation
+    // Strong success haptic
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Celebratory animation sequence
+    scale.value = withSequence(
+      withSpring(0.98, { damping: 15 }),
+      withSpring(1.03, { damping: 8, stiffness: 200 }),
+      withSpring(1, { damping: 12 })
+    );
+
+    // Progress fill animation
+    progressWidth.value = withTiming(100, {
+      duration: 400,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+    });
+
+    // Add secondary haptic for extra satisfaction
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }, 200);
+
+    // Delay for celebration feel
     setTimeout(() => {
       onComplete();
-    }, 400);
+      setIsCompleting(false);
+    }, 500);
+  };
+
+  const handleButtonPressIn = () => {
+    buttonScale.value = withSpring(0.96, { damping: 15 });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleButtonPressOut = () => {
+    buttonScale.value = withSpring(1, { damping: 10 });
   };
 
   const cardStyle = useAnimatedStyle(() => ({
@@ -89,15 +142,27 @@ function TinyStepCard({ step, isActive, onComplete, index }: TinyStepCardProps) 
     width: `${progressWidth.value}%`,
   }));
 
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: buttonScale.value }],
+  }));
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: interpolate(pulseOpacity.value, [0, 0.3], [1, 1.1]) }],
+  }));
+
   if (step.isCompleted) {
     return (
       <Animated.View
-        entering={FadeIn.delay(index * 100)}
+        entering={FadeIn.delay(index * 80)}
         style={styles.completedStepCard}
       >
-        <View style={styles.completedCheckCircle}>
+        <Animated.View
+          entering={ZoomIn.springify().damping(12)}
+          style={styles.completedCheckCircle}
+        >
           <Text style={styles.completedCheck}>✓</Text>
-        </View>
+        </Animated.View>
         <Text style={styles.completedStepTitle}>{step.title}</Text>
       </Animated.View>
     );
@@ -109,11 +174,11 @@ function TinyStepCard({ step, isActive, onComplete, index }: TinyStepCardProps) 
 
   return (
     <Animated.View
-      entering={FadeInUp.springify().damping(15)}
+      entering={FadeInUp.springify().damping(15).delay(100)}
       style={[cardStyle]}
     >
       <View style={styles.activeStepContainer}>
-        {/* Glow effect */}
+        {/* Animated glow effect */}
         <Animated.View style={[styles.stepGlow, glowStyle]} />
 
         <View style={styles.activeStepCard}>
@@ -122,8 +187,11 @@ function TinyStepCard({ step, isActive, onComplete, index }: TinyStepCardProps) 
             <Animated.View style={[styles.progressFill, progressStyle]} />
           </View>
 
-          <View style={styles.stepNumber}>
-            <Text style={styles.stepNumberText}>{index + 1}</Text>
+          <View style={styles.stepHeader}>
+            <View style={styles.stepNumber}>
+              <Text style={styles.stepNumberText}>{index + 1}</Text>
+            </View>
+            <Text style={styles.stepHint}>Current Step</Text>
           </View>
 
           <Text style={styles.activeStepTitle}>{step.title}</Text>
@@ -132,18 +200,29 @@ function TinyStepCard({ step, isActive, onComplete, index }: TinyStepCardProps) 
             <Text style={styles.activeStepDescription}>{step.description}</Text>
           )}
 
-          <TouchableOpacity
-            style={styles.completeStepButton}
+          <Pressable
             onPress={handleComplete}
-            activeOpacity={0.9}
+            onPressIn={handleButtonPressIn}
+            onPressOut={handleButtonPressOut}
+            disabled={isCompleting}
+            style={styles.completeStepButton}
           >
-            <LinearGradient
-              colors={[colors.vibrantTeal, colors.tealDark]}
-              style={styles.completeStepGradient}
-            >
-              <Text style={styles.completeStepText}>Done! Next step →</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+            {/* Pulse hint */}
+            <Animated.View style={[styles.buttonPulse, pulseStyle]} />
+
+            <Animated.View style={[styles.buttonInner, buttonAnimatedStyle]}>
+              <LinearGradient
+                colors={[colors.vibrantTeal, colors.tealDark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.completeStepGradient}
+              >
+                <Text style={styles.completeStepText}>
+                  {isCompleting ? '✨ Nice!' : 'Done! Next step →'}
+                </Text>
+              </LinearGradient>
+            </Animated.View>
+          </Pressable>
         </View>
       </View>
     </Animated.View>
@@ -373,11 +452,74 @@ Make the first step extremely easy and quick to build momentum. Each subsequent 
               </Animated.View>
             ) : isAllComplete ? (
               <Animated.View entering={FadeIn} style={styles.celebrationContainer}>
-                <Text style={styles.celebrationEmoji}>🎉</Text>
-                <Text style={styles.celebrationTitle}>Amazing Work!</Text>
-                <Text style={styles.celebrationText}>
-                  You completed all the tiny steps. Small wins lead to big changes!
-                </Text>
+                {/* Confetti-like decorations */}
+                <View style={styles.confettiContainer}>
+                  <Animated.Text
+                    entering={FadeInUp.delay(100).springify()}
+                    style={[styles.confettiEmoji, { left: '10%', top: 20 }]}
+                  >
+                    ✨
+                  </Animated.Text>
+                  <Animated.Text
+                    entering={FadeInUp.delay(200).springify()}
+                    style={[styles.confettiEmoji, { right: '15%', top: 10 }]}
+                  >
+                    🌟
+                  </Animated.Text>
+                  <Animated.Text
+                    entering={FadeInUp.delay(300).springify()}
+                    style={[styles.confettiEmoji, { left: '20%', top: 60 }]}
+                  >
+                    💫
+                  </Animated.Text>
+                  <Animated.Text
+                    entering={FadeInUp.delay(150).springify()}
+                    style={[styles.confettiEmoji, { right: '10%', top: 50 }]}
+                  >
+                    ⭐
+                  </Animated.Text>
+                </View>
+
+                <Animated.View entering={ZoomIn.springify().damping(10).delay(200)}>
+                  <LinearGradient
+                    colors={[`${colors.champagneGold}30`, `${colors.vibrantTeal}20`]}
+                    style={styles.celebrationBadge}
+                  >
+                    <Text style={styles.celebrationEmoji}>🎉</Text>
+                  </LinearGradient>
+                </Animated.View>
+
+                <Animated.Text
+                  entering={FadeInUp.springify().delay(400)}
+                  style={styles.celebrationTitle}
+                >
+                  Amazing Work!
+                </Animated.Text>
+                <Animated.Text
+                  entering={FadeInUp.springify().delay(500)}
+                  style={styles.celebrationText}
+                >
+                  You completed all the tiny steps.{'\n'}Small wins lead to big changes!
+                </Animated.Text>
+
+                <Animated.View entering={FadeInUp.delay(700)}>
+                  <TouchableOpacity
+                    style={styles.celebrationButton}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      onComplete();
+                      endDeepDive();
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={[colors.champagneGold, colors.goldDark]}
+                      style={styles.celebrationButtonGradient}
+                    >
+                      <Text style={styles.celebrationButtonText}>Claim Your Win! 🏆</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </Animated.View>
               </Animated.View>
             ) : (
               <>
@@ -546,17 +688,39 @@ const styles = StyleSheet.create({
   celebrationContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing['4xl'],
+    paddingVertical: spacing['3xl'],
+    position: 'relative',
+  },
+  confettiContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+  },
+  confettiEmoji: {
+    position: 'absolute',
+    fontSize: 24,
+  },
+  celebrationBadge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+    borderWidth: 3,
+    borderColor: colors.champagneGold,
   },
   celebrationEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.lg,
+    fontSize: 48,
   },
   celebrationTitle: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize['3xl'],
     color: colors.midnightNavy,
     marginBottom: spacing.md,
+    textAlign: 'center',
   },
   celebrationText: {
     fontFamily: typography.fontFamily.body,
@@ -564,6 +728,22 @@ const styles = StyleSheet.create({
     color: colors.gray600,
     textAlign: 'center',
     lineHeight: 24,
+    marginBottom: spacing.xl,
+  },
+  celebrationButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  celebrationButtonGradient: {
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing['3xl'],
+    alignItems: 'center',
+  },
+  celebrationButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.lg,
+    color: colors.midnightNavy,
   },
   // Completed step styles
   completedStepCard: {
@@ -633,6 +813,12 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: colors.vibrantTeal,
   },
+  stepHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
   stepNumber: {
     width: 36,
     height: 36,
@@ -640,12 +826,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.boldTerracotta,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
   },
   stepNumberText: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
     color: colors.white,
+  },
+  stepHint: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.boldTerracotta,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   activeStepTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
@@ -661,6 +853,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   completeStepButton: {
+    position: 'relative',
+    borderRadius: borderRadius.xl,
+    overflow: 'visible',
+  },
+  buttonPulse: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    backgroundColor: colors.vibrantTeal,
+    borderRadius: borderRadius.xl + 4,
+    zIndex: -1,
+  },
+  buttonInner: {
     borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.md,

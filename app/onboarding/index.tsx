@@ -20,6 +20,7 @@ import Animated, {
   withTiming,
   interpolate,
   Extrapolation,
+  FadeInUp,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -217,36 +218,56 @@ export default function OnboardingScreen() {
               contentContainerStyle={styles.stuckPointScrollContent}
               showsVerticalScrollIndicator={false}
               bounces={true}
-              decelerationRate="normal"
+              decelerationRate="fast"
+              snapToInterval={88} // Card height + margin for momentum scrolling
+              snapToAlignment="start"
             >
-              <View style={styles.stuckPointGrid}>
-                {stuckPoints.map((stuckPoint, idx) => {
-                  const isSelected = selectedStuckPoint === stuckPoint.id;
-                  return (
+              {stuckPoints.map((stuckPoint, idx) => {
+                const isSelected = selectedStuckPoint === stuckPoint.id;
+                return (
+                  <Animated.View
+                    key={stuckPoint.id}
+                    entering={FadeInUp.delay(idx * 50).springify().damping(18)}
+                  >
                     <TouchableOpacity
-                      key={stuckPoint.id}
                       style={[
                         styles.stuckPointCard,
-                        isSelected && { borderColor: stuckPoint.color, borderWidth: 2 },
+                        isSelected && {
+                          borderColor: stuckPoint.color,
+                          borderWidth: 2,
+                          backgroundColor: `${stuckPoint.color}10`,
+                        },
                       ]}
                       onPress={() => {
-                        Haptics.selectionAsync();
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                         setSelectedStuckPoint(stuckPoint.id);
                       }}
-                      activeOpacity={0.8}
+                      activeOpacity={0.85}
                     >
-                      <Text style={styles.stuckPointEmoji}>{stuckPoint.emoji}</Text>
-                      <Text style={styles.stuckPointTitle}>{stuckPoint.title}</Text>
-                      <Text style={styles.stuckPointDescription}>{stuckPoint.description}</Text>
-                      {isSelected && (
-                        <View style={[styles.checkmark, { backgroundColor: stuckPoint.color }]}>
-                          <Text style={styles.checkmarkText}>✓</Text>
+                      <View style={styles.stuckPointContent}>
+                        <View style={[styles.stuckPointIconContainer, { backgroundColor: `${stuckPoint.color}20` }]}>
+                          <Text style={styles.stuckPointEmoji}>{stuckPoint.emoji}</Text>
                         </View>
-                      )}
+                        <View style={styles.stuckPointTextContainer}>
+                          <Text style={[styles.stuckPointTitle, isSelected && { color: stuckPoint.color }]}>
+                            {stuckPoint.title}
+                          </Text>
+                          <Text style={styles.stuckPointDescription} numberOfLines={2}>
+                            {stuckPoint.description}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <View style={[styles.checkmark, { backgroundColor: stuckPoint.color }]}>
+                            <Text style={styles.checkmarkText}>✓</Text>
+                          </View>
+                        )}
+                      </View>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  </Animated.View>
+                );
+              })}
+              {/* Extra padding at bottom for scroll */}
+              <View style={{ height: 100 }} />
             </ScrollView>
           </View>
         )}
@@ -458,49 +479,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stuckPointScrollContent: {
-    paddingBottom: spacing['3xl'],
-  },
-  stuckPointGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.md,
   },
   stuckPointCard: {
-    width: (width - spacing.xl * 2 - spacing.md) / 2,
+    width: '100%',
     backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    ...shadows.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadows.sm,
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  stuckPointContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stuckPointIconContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  stuckPointTextContainer: {
+    flex: 1,
+    paddingRight: spacing.md,
+  },
   stuckPointEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.sm,
+    fontSize: 26,
   },
   stuckPointTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
   stuckPointDescription: {
     fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.gray500,
-    textAlign: 'center',
+    lineHeight: 18,
   },
   checkmark: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },

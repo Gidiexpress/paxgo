@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   getInstantReframe,
   generatePermissionSlip,
@@ -11,15 +12,61 @@ import {
 } from '@/services/aiService';
 import { ChatMessage } from '@/types';
 
-// Hook for intelligent chat with Gabby - context-aware and versatile
+const CHAT_HISTORY_KEY = '@paxgo_chat_history';
+
+// Hook for intelligent chat with Gabby - context-aware and versatile with persistence
 export function useInstantReframe(stuckPoint?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isRestored, setIsRestored] = useState(false);
 
   // Use ref to always have access to latest messages in the callback
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
+
+  // Restore chat history on mount
+  useEffect(() => {
+    const restoreChatHistory = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(CHAT_HISTORY_KEY);
+        if (stored) {
+          const parsedMessages: ChatMessage[] = JSON.parse(stored);
+          // Only restore if messages are from the same session (within last 24 hours)
+          const now = new Date().getTime();
+          const dayAgo = now - 24 * 60 * 60 * 1000;
+          const recentMessages = parsedMessages.filter(
+            m => new Date(m.timestamp).getTime() > dayAgo
+          );
+          if (recentMessages.length > 0) {
+            setMessages(recentMessages);
+            messagesRef.current = recentMessages;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to restore chat history:', err);
+      } finally {
+        setIsRestored(true);
+      }
+    };
+    restoreChatHistory();
+  }, []);
+
+  // Persist chat history whenever messages change
+  useEffect(() => {
+    if (isRestored && messages.length > 0) {
+      const saveChatHistory = async () => {
+        try {
+          // Keep only last 50 messages to manage storage
+          const messagesToSave = messages.slice(-50);
+          await AsyncStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+        } catch (err) {
+          console.warn('Failed to save chat history:', err);
+        }
+      };
+      saveChatHistory();
+    }
+  }, [messages, isRestored]);
 
   const sendMessage = useCallback(async (userMessage: string, userStuckPoint?: string) => {
     // Validate input
@@ -80,10 +127,16 @@ export function useInstantReframe(stuckPoint?: string) {
     }
   }, [stuckPoint]);
 
-  const clearChat = useCallback(() => {
+  const clearChat = useCallback(async () => {
     setMessages([]);
     messagesRef.current = [];
     setError(null);
+    // Also clear persisted chat
+    try {
+      await AsyncStorage.removeItem(CHAT_HISTORY_KEY);
+    } catch (err) {
+      console.warn('Failed to clear chat history:', err);
+    }
   }, []);
 
   // Get the last user message for generating permission slips/actions
@@ -98,6 +151,7 @@ export function useInstantReframe(stuckPoint?: string) {
     sendMessage,
     clearChat,
     getLastUserMessage,
+    isRestored,
   };
 }
 

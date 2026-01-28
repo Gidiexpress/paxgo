@@ -1,8 +1,12 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing } from '@/constants/theme';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const TAB_COUNT = 4;
+const TAB_WIDTH = SCREEN_WIDTH / TAB_COUNT;
 
 interface TabIconProps {
   icon: string;
@@ -14,13 +18,17 @@ interface TabIconProps {
 function TabIcon({ icon, label, focused, color }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
-      <Text style={[styles.tabIcon, { opacity: focused ? 1 : 0.6 }]}>{icon}</Text>
+      <Text style={[styles.tabIcon, { opacity: focused ? 1 : 0.7 }]}>{icon}</Text>
       <Text
         style={[
           styles.tabLabel,
-          { color, fontFamily: focused ? typography.fontFamily.bodySemiBold : typography.fontFamily.body },
+          {
+            color,
+            fontFamily: focused ? typography.fontFamily.bodySemiBold : typography.fontFamily.body,
+          },
         ]}
         numberOfLines={1}
+        ellipsizeMode="clip"
         adjustsFontSizeToFit={false}
         allowFontScaling={false}
       >
@@ -43,13 +51,15 @@ export default function TabLayout() {
           backgroundColor: colors.parchmentWhite,
           borderTopWidth: 1,
           borderTopColor: colors.gray200,
-          paddingBottom: insets.bottom,
-          height: 60 + insets.bottom,
-          paddingTop: spacing.sm,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.xs,
+          height: 56 + (insets.bottom > 0 ? insets.bottom : spacing.xs),
+          paddingTop: spacing.xs,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         tabBarLabelStyle: {
           fontFamily: typography.fontFamily.bodyMedium,
-          fontSize: typography.fontSize.xs,
+          fontSize: 10,
         },
       }}
     >
@@ -101,16 +111,18 @@ const styles = StyleSheet.create({
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 60,
-    paddingHorizontal: 4,
+    width: TAB_WIDTH - 8,
+    maxWidth: 80,
+    paddingHorizontal: 2,
   },
   tabIcon: {
-    fontSize: 22,
-    marginBottom: 2,
+    fontSize: 20,
+    marginBottom: 3,
   },
   tabLabel: {
-    fontSize: 11,
-    letterSpacing: -0.2,
+    fontSize: 10,
+    letterSpacing: -0.3,
     textAlign: 'center',
+    lineHeight: 12,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -7,8 +7,11 @@ import Animated, {
   withSpring,
   withSequence,
   withTiming,
+  withRepeat,
+  withDelay,
   interpolate,
   Extrapolation,
+  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Card } from './ui/Card';
@@ -39,10 +42,31 @@ export function ActionCard({
   const glowOpacity = useSharedValue(0);
   const checkScale = useSharedValue(action.isCompleted ? 1 : 0);
   const pressProgress = useSharedValue(0);
+  const deepDiveButtonScale = useSharedValue(1);
+  const deepDiveGlow = useSharedValue(0);
+  const quickCompleteScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(0);
 
   useEffect(() => {
-    checkScale.value = withSpring(action.isCompleted ? 1 : 0);
+    checkScale.value = withSpring(action.isCompleted ? 1 : 0, { damping: 12 });
   }, [action.isCompleted]);
+
+  // Subtle attention-getting pulse for "Do it now" button
+  useEffect(() => {
+    if (!action.isCompleted && !isLocked) {
+      pulseOpacity.value = withDelay(
+        3000,
+        withRepeat(
+          withSequence(
+            withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+            withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) })
+          ),
+          2,
+          true
+        )
+      );
+    }
+  }, [action.isCompleted, isLocked]);
 
   const handlePressIn = () => {
     if (isLocked) return;
@@ -58,17 +82,43 @@ export function ActionCard({
     pressProgress.value = withTiming(0, { duration: 200 });
   };
 
+  const handleDeepDiveButtonPressIn = () => {
+    deepDiveButtonScale.value = withSpring(0.95, { damping: 15 });
+    deepDiveGlow.value = withTiming(1, { duration: 100 });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleDeepDiveButtonPressOut = () => {
+    deepDiveButtonScale.value = withSpring(1, { damping: 10 });
+    deepDiveGlow.value = withTiming(0, { duration: 200 });
+  };
+
+  const handleQuickCompletePressIn = () => {
+    quickCompleteScale.value = withSpring(0.9, { damping: 15 });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  const handleQuickCompletePressOut = () => {
+    quickCompleteScale.value = withSpring(1, { damping: 10 });
+  };
+
   const handleComplete = async () => {
     if (action.isCompleted || isLocked) return;
 
-    // Haptic feedback
+    // Strong success haptic
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Animation
+    // Satisfying animation
     scale.value = withSequence(
-      withSpring(1.05, { damping: 8 }),
-      withSpring(1)
+      withSpring(0.97, { damping: 15 }),
+      withSpring(1.02, { damping: 10, stiffness: 200 }),
+      withSpring(1, { damping: 12 })
     );
+
+    // Additional haptic after animation
+    setTimeout(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 150);
 
     onComplete(action.id);
   };
@@ -107,6 +157,24 @@ export function ActionCard({
       borderColor: colors.boldTerracotta,
     };
   });
+
+  const deepDiveButtonStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: deepDiveButtonScale.value }],
+  }));
+
+  const deepDiveGlowStyle = useAnimatedStyle(() => ({
+    opacity: deepDiveGlow.value * 0.4,
+    transform: [{ scale: 1 + deepDiveGlow.value * 0.1 }],
+  }));
+
+  const quickCompleteStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: quickCompleteScale.value }],
+  }));
+
+  const buttonPulseStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: 1 + pulseOpacity.value * 0.15 }],
+  }));
 
   if (isLocked) {
     return (
@@ -183,30 +251,44 @@ export function ActionCard({
 
               {!action.isCompleted ? (
                 <View style={styles.actionButtons}>
-                  {/* Deep Dive Button */}
-                  <TouchableOpacity
+                  {/* Deep Dive Button with premium feel */}
+                  <Pressable
                     onPress={handleDeepDive}
-                    style={styles.deepDiveButton}
-                    activeOpacity={0.9}
+                    onPressIn={handleDeepDiveButtonPressIn}
+                    onPressOut={handleDeepDiveButtonPressOut}
+                    style={styles.deepDiveButtonWrapper}
                   >
-                    <LinearGradient
-                      colors={[colors.boldTerracotta, colors.terracottaDark]}
-                      style={styles.deepDiveGradient}
-                    >
-                      <Text style={styles.deepDiveText}>
-                        {hasActiveDeepDive ? 'Continue' : 'Do it now'}
-                      </Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                    {/* Button pulse hint */}
+                    <Animated.View style={[styles.buttonPulse, buttonPulseStyle]} />
+                    {/* Glow on press */}
+                    <Animated.View style={[styles.buttonGlow, deepDiveGlowStyle]} />
+                    <Animated.View style={[styles.deepDiveButton, deepDiveButtonStyle]}>
+                      <LinearGradient
+                        colors={hasActiveDeepDive
+                          ? [colors.vibrantTeal, colors.tealDark]
+                          : [colors.boldTerracotta, colors.terracottaDark]
+                        }
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.deepDiveGradient}
+                      >
+                        <Text style={styles.deepDiveText}>
+                          {hasActiveDeepDive ? 'Continue' : 'Do it now'}
+                        </Text>
+                      </LinearGradient>
+                    </Animated.View>
+                  </Pressable>
 
-                  {/* Quick Complete */}
-                  <TouchableOpacity
+                  {/* Quick Complete with animation */}
+                  <Pressable
                     onPress={handleComplete}
-                    style={styles.quickCompleteButton}
-                    activeOpacity={0.8}
+                    onPressIn={handleQuickCompletePressIn}
+                    onPressOut={handleQuickCompletePressOut}
                   >
-                    <Text style={styles.quickCompleteText}>✓</Text>
-                  </TouchableOpacity>
+                    <Animated.View style={[styles.quickCompleteButton, quickCompleteStyle]}>
+                      <Text style={styles.quickCompleteText}>✓</Text>
+                    </Animated.View>
+                  </Pressable>
                 </View>
               ) : (
                 <View style={styles.completedBadge}>
@@ -313,33 +395,59 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+  deepDiveButtonWrapper: {
+    position: 'relative',
+  },
+  buttonPulse: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    backgroundColor: colors.boldTerracotta,
+    borderRadius: borderRadius.lg + 3,
+    zIndex: -1,
+  },
+  buttonGlow: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    right: -4,
+    bottom: -4,
+    backgroundColor: colors.champagneGold,
+    borderRadius: borderRadius.lg + 4,
+    zIndex: -2,
+  },
   deepDiveButton: {
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    ...shadows.sm,
+    ...shadows.md,
   },
   deepDiveGradient: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.lg + 4,
   },
   deepDiveText: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.sm,
     color: colors.white,
+    letterSpacing: 0.3,
   },
   quickCompleteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.gray200,
+    ...shadows.sm,
   },
   quickCompleteText: {
-    fontSize: 16,
+    fontSize: 18,
     color: colors.gray600,
+    fontWeight: '600',
   },
   completedBadge: {
     flexDirection: 'row',
