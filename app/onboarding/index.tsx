@@ -218,16 +218,17 @@ export default function OnboardingScreen() {
               contentContainerStyle={styles.stuckPointScrollContent}
               showsVerticalScrollIndicator={false}
               bounces={true}
-              decelerationRate="fast"
-              snapToInterval={88} // Card height + margin for momentum scrolling
-              snapToAlignment="start"
+              alwaysBounceVertical={true}
+              decelerationRate="normal"
+              scrollEventThrottle={16}
+              overScrollMode="always"
             >
               {stuckPoints.map((stuckPoint, idx) => {
                 const isSelected = selectedStuckPoint === stuckPoint.id;
                 return (
                   <Animated.View
                     key={stuckPoint.id}
-                    entering={FadeInUp.delay(idx * 50).springify().damping(18)}
+                    entering={FadeInUp.delay(idx * 60).springify().damping(16).stiffness(100)}
                   >
                     <TouchableOpacity
                       style={[
@@ -235,7 +236,7 @@ export default function OnboardingScreen() {
                         isSelected && {
                           borderColor: stuckPoint.color,
                           borderWidth: 2,
-                          backgroundColor: `${stuckPoint.color}10`,
+                          backgroundColor: `${stuckPoint.color}12`,
                         },
                       ]}
                       onPress={() => {
@@ -245,7 +246,7 @@ export default function OnboardingScreen() {
                       activeOpacity={0.85}
                     >
                       <View style={styles.stuckPointContent}>
-                        <View style={[styles.stuckPointIconContainer, { backgroundColor: `${stuckPoint.color}20` }]}>
+                        <View style={[styles.stuckPointIconContainer, { backgroundColor: `${stuckPoint.color}18` }]}>
                           <Text style={styles.stuckPointEmoji}>{stuckPoint.emoji}</Text>
                         </View>
                         <View style={styles.stuckPointTextContainer}>
@@ -257,17 +258,20 @@ export default function OnboardingScreen() {
                           </Text>
                         </View>
                         {isSelected && (
-                          <View style={[styles.checkmark, { backgroundColor: stuckPoint.color }]}>
+                          <Animated.View
+                            entering={FadeInUp.springify().damping(12)}
+                            style={[styles.checkmark, { backgroundColor: stuckPoint.color }]}
+                          >
                             <Text style={styles.checkmarkText}>✓</Text>
-                          </View>
+                          </Animated.View>
                         )}
                       </View>
                     </TouchableOpacity>
                   </Animated.View>
                 );
               })}
-              {/* Extra padding at bottom for scroll */}
-              <View style={{ height: 100 }} />
+              {/* Generous bottom padding for comfortable scrolling */}
+              <View style={{ height: 140 }} />
             </ScrollView>
           </View>
         )}
@@ -477,17 +481,20 @@ const styles = StyleSheet.create({
   },
   stuckPointScroll: {
     flex: 1,
+    marginHorizontal: -spacing.xs, // Allow cards to breathe
   },
   stuckPointScrollContent: {
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.lg,
   },
   stuckPointCard: {
     width: '100%',
     backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    ...shadows.sm,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
     borderWidth: 2,
     borderColor: 'transparent',
   },

@@ -95,31 +95,47 @@ export const shadows = {
   sm: {
     shadowColor: colors.midnightNavy,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
     elevation: 1,
   },
   md: {
     shadowColor: colors.midnightNavy,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
     elevation: 3,
   },
   lg: {
     shadowColor: colors.midnightNavy,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 6,
   },
   xl: {
     shadowColor: colors.midnightNavy,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
     elevation: 10,
   },
+  // Premium soft glow for elevated elements
+  glow: {
+    shadowColor: colors.champagneGold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+};
+
+// Editorial-inspired spacing for premium feel
+export const editorialSpacing = {
+  cardPadding: 20,
+  sectionGap: 32,
+  screenPadding: 20,
+  cardGap: 16,
 };
 
 export const gradients = {

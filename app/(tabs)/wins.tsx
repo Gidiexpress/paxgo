@@ -328,26 +328,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing['3xl'],
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing['4xl'],
   },
   headerTitle: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['3xl'],
+    fontSize: typography.fontSize['4xl'],
     color: colors.midnightNavy,
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
+    letterSpacing: -0.5,
   },
   mapContainer: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
   },
   milestonesSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
   },
   sectionTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    letterSpacing: -0.2,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -364,13 +366,13 @@ const styles = StyleSheet.create({
     paddingRight: spacing.lg,
   },
   milestoneCard: {
-    width: 100,
+    width: 110,
     alignItems: 'center',
     backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
-    padding: spacing.md,
+    padding: spacing.lg,
     marginRight: spacing.md,
-    ...shadows.sm,
+    ...shadows.md,
     opacity: 0.6,
   },
   milestoneUnlocked: {
@@ -409,7 +411,7 @@ const styles = StyleSheet.create({
     color: colors.gray400,
   },
   statsSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
   },
   statsRow: {
     flexDirection: 'row',
@@ -418,18 +420,18 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.xl,
   },
   statNumber: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['3xl'],
+    fontSize: typography.fontSize['4xl'],
     color: colors.boldTerracotta,
   },
   statLabel: {
     fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.gray600,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   nextMilestoneCard: {
     marginBottom: spacing.xl,
@@ -547,23 +549,23 @@ const styles = StyleSheet.create({
   },
   // Community Section Styles
   communitySection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
   },
   communityCards: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
+    gap: spacing.lg,
+    marginBottom: spacing.lg,
   },
   communityCard: {
     flex: 1,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
-    ...shadows.md,
+    ...shadows.lg,
   },
   communityCardGradient: {
-    padding: spacing.lg,
+    padding: spacing.xl,
     alignItems: 'center',
-    minHeight: 120,
+    minHeight: 130,
     justifyContent: 'center',
     position: 'relative',
   },

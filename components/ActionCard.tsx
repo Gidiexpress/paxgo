@@ -306,7 +306,7 @@ export function ActionCard({
 
 const styles = StyleSheet.create({
   cardWrapper: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     position: 'relative',
   },
   glowEffect: {
@@ -316,10 +316,10 @@ const styles = StyleSheet.create({
     right: -4,
     bottom: -4,
     backgroundColor: colors.boldTerracotta,
-    borderRadius: borderRadius.xl + 4,
+    borderRadius: borderRadius['2xl'] + 4,
   },
   cardContainer: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
   },
   card: {
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   badges: {
     flexDirection: 'row',
@@ -362,20 +362,21 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    lineHeight: 24,
   },
   description: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.gray600,
-    lineHeight: 20,
-    marginBottom: spacing.md,
+    lineHeight: 22,
+    marginBottom: spacing.lg,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    marginTop: spacing.md,
   },
   duration: {
     flexDirection: 'row',

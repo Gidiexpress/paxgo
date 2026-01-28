@@ -308,19 +308,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
   },
   headerCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
     ...shadows.lg,
   },
   headerGradient: {
     alignItems: 'center',
-    paddingVertical: spacing['2xl'],
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing['3xl'],
+    paddingHorizontal: spacing.xl,
   },
   avatarContainer: {
     position: 'relative',
@@ -426,21 +426,22 @@ const styles = StyleSheet.create({
     color: colors.midnightNavy,
   },
   menuSection: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing['2xl'],
   },
   sectionTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    letterSpacing: -0.2,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    padding: spacing.lg,
+    padding: spacing.lg + 2,
     borderRadius: borderRadius.xl,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
     ...shadows.sm,
   },
   menuItemPremium: {

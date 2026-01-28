@@ -150,37 +150,37 @@ export function ChatActionCard({ action, onStartNow, onSaveForLater }: ChatActio
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: spacing.md,
-    borderRadius: borderRadius.xl,
+    marginVertical: spacing.lg,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
     ...shadows.lg,
   },
   gradient: {
-    padding: spacing.lg,
+    padding: spacing.xl,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   badge: {
-    backgroundColor: colors.champagneGold + '30',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.champagneGold + '25',
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: borderRadius.lg,
   },
   badgeText: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.xs,
     color: colors.terracottaDark,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   durationBadge: {
     backgroundColor: colors.gray100,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    borderRadius: borderRadius.md,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: borderRadius.lg,
   },
   durationText: {
     fontFamily: typography.fontFamily.body,
@@ -188,13 +188,13 @@ const styles = StyleSheet.create({
     color: colors.gray600,
   },
   content: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   categoryIcon: {
     fontSize: 14,
@@ -207,15 +207,16 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     color: colors.midnightNavy,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+    lineHeight: 26,
   },
   description: {
     fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.base,
     color: colors.gray600,
-    lineHeight: 20,
+    lineHeight: 22,
   },
   actions: {
     flexDirection: 'row',
@@ -224,9 +225,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   saveButton: {
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     borderWidth: 1.5,
     borderColor: colors.gray300,
     backgroundColor: colors.white,
@@ -237,12 +238,12 @@ const styles = StyleSheet.create({
     color: colors.gray600,
   },
   startButtonWrapper: {
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     overflow: 'hidden',
     ...shadows.md,
   },
   startButton: {
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
   },
   startButtonText: {

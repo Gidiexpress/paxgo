@@ -424,10 +424,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
+    backgroundColor: colors.parchmentWhite,
   },
   backButton: {
     width: 32,
@@ -465,14 +466,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chatContent: {
-    padding: spacing.lg,
-    paddingBottom: spacing['2xl'],
+    padding: spacing.xl,
+    paddingBottom: spacing['3xl'],
   },
   welcomeContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   welcomeCard: {
     backgroundColor: colors.white,
+    borderRadius: borderRadius['2xl'],
   },
   gabbyHeader: {
     flexDirection: 'row',
@@ -505,7 +507,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   messageContainer: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   userMessage: {
     alignItems: 'flex-end',
@@ -534,18 +536,21 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '85%',
+    borderRadius: borderRadius.xl,
   },
   userBubble: {
     backgroundColor: colors.midnightNavy,
+    borderBottomRightRadius: borderRadius.sm,
   },
   assistantBubble: {
     backgroundColor: colors.white,
+    borderBottomLeftRadius: borderRadius.sm,
   },
   messageText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.base,
     color: colors.gray700,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   userMessageText: {
     color: colors.white,
@@ -637,8 +642,10 @@ const styles = StyleSheet.create({
     color: colors.tealDark,
   },
   inputContainer: {
-    padding: spacing.md,
-    borderTopWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.gray200,
     backgroundColor: colors.parchmentWhite,
   },
@@ -647,7 +654,7 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     color: colors.gray500,
     textAlign: 'center',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   inputRow: {
     flexDirection: 'row',
@@ -657,19 +664,22 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.md + 2,
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
     maxHeight: 100,
+    minHeight: 48,
     ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.gray100,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.boldTerracotta,
     alignItems: 'center',
     justifyContent: 'center',
@@ -677,6 +687,7 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     backgroundColor: colors.gray300,
+    shadowOpacity: 0,
   },
   sendIcon: {
     color: colors.white,

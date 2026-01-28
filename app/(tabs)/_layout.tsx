@@ -1,12 +1,8 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing } from '@/constants/theme';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const TAB_COUNT = 4;
-const TAB_WIDTH = SCREEN_WIDTH / TAB_COUNT;
+import { colors, typography } from '@/constants/theme';
 
 interface TabIconProps {
   icon: string;
@@ -18,18 +14,18 @@ interface TabIconProps {
 function TabIcon({ icon, label, focused, color }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
-      <Text style={[styles.tabIcon, { opacity: focused ? 1 : 0.7 }]}>{icon}</Text>
+      <View style={[styles.iconWrapper, focused && styles.iconWrapperFocused]}>
+        <Text style={[styles.tabIcon, { opacity: focused ? 1 : 0.6 }]}>{icon}</Text>
+      </View>
       <Text
         style={[
           styles.tabLabel,
           {
-            color,
+            color: focused ? colors.boldTerracotta : colors.gray500,
             fontFamily: focused ? typography.fontFamily.bodySemiBold : typography.fontFamily.body,
           },
         ]}
         numberOfLines={1}
-        ellipsizeMode="clip"
-        adjustsFontSizeToFit={false}
         allowFontScaling={false}
       >
         {label}
@@ -40,6 +36,7 @@ function TabIcon({ icon, label, focused, color }: TabIconProps) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = 64 + (insets.bottom > 0 ? insets.bottom : 8);
 
   return (
     <Tabs
@@ -49,17 +46,20 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.gray500,
         tabBarStyle: {
           backgroundColor: colors.parchmentWhite,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.gray200,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.xs,
-          height: 56 + (insets.bottom > 0 ? insets.bottom : spacing.xs),
-          paddingTop: spacing.xs,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          height: tabBarHeight,
+          paddingTop: 8,
           elevation: 0,
-          shadowOpacity: 0,
+          shadowColor: colors.midnightNavy,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 8,
         },
         tabBarLabelStyle: {
           fontFamily: typography.fontFamily.bodyMedium,
-          fontSize: 10,
+          fontSize: 11,
         },
       }}
     >
@@ -111,18 +111,28 @@ const styles = StyleSheet.create({
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: TAB_WIDTH - 8,
-    maxWidth: 80,
-    paddingHorizontal: 2,
+    minWidth: 60,
+    paddingHorizontal: 4,
+  },
+  iconWrapper: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 14,
+    marginBottom: 2,
+  },
+  iconWrapperFocused: {
+    backgroundColor: `${colors.boldTerracotta}10`,
   },
   tabIcon: {
-    fontSize: 20,
-    marginBottom: 3,
+    fontSize: 18,
   },
   tabLabel: {
-    fontSize: 10,
-    letterSpacing: -0.3,
+    fontSize: 11,
+    letterSpacing: 0,
     textAlign: 'center',
-    lineHeight: 12,
+    lineHeight: 14,
+    includeFontPadding: false,
   },
 });

@@ -1,15 +1,23 @@
 import React from 'react';
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   ViewStyle,
   TextStyle,
   ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, typography, borderRadius, shadows } from '@/constants/theme';
+import { colors, typography, borderRadius, shadows, spacing } from '@/constants/theme';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface ButtonProps {
   title: string;
@@ -36,12 +44,32 @@ export function Button({
   textStyle,
   gradient = false,
 }: ButtonProps) {
+  const scale = useSharedValue(1);
+  const shadowOpacity = useSharedValue(0.06);
+
+  const handlePressIn = () => {
+    if (!disabled && !loading) {
+      scale.value = withSpring(0.97, { damping: 15, stiffness: 400 });
+      shadowOpacity.value = withTiming(0.02, { duration: 100 });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 300 });
+    shadowOpacity.value = withTiming(0.06, { duration: 150 });
+  };
+
   const handlePress = async () => {
     if (!disabled && !loading) {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onPress();
     }
   };
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
   const buttonStyles = [
     styles.base,
@@ -53,8 +81,8 @@ export function Button({
 
   const textStyles = [
     styles.text,
-    styles[`${size}Text`],
-    styles[`${variant}Text`],
+    styles[`${size}Text` as keyof typeof styles],
+    styles[`${variant}Text` as keyof typeof styles],
     disabled && styles.disabledText,
     textStyle,
   ];
@@ -77,11 +105,12 @@ export function Button({
 
   if (gradient && !disabled) {
     return (
-      <TouchableOpacity
+      <AnimatedPressable
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         onPress={handlePress}
         disabled={disabled || loading}
-        activeOpacity={0.8}
-        style={style}
+        style={[style, animatedStyle]}
       >
         <LinearGradient
           colors={[colors.champagneGold, colors.goldDark]}
@@ -91,19 +120,20 @@ export function Button({
         >
           {content}
         </LinearGradient>
-      </TouchableOpacity>
+      </AnimatedPressable>
     );
   }
 
   return (
-    <TouchableOpacity
-      style={buttonStyles}
+    <AnimatedPressable
+      style={[buttonStyles, animatedStyle]}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
       onPress={handlePress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
     >
       {content}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -112,15 +142,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
     ...shadows.md,
   },
   gradient: {
     backgroundColor: 'transparent',
   },
   sm: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: borderRadius.lg,
   },
   md: {
@@ -162,6 +192,7 @@ const styles = StyleSheet.create({
   text: {
     fontFamily: typography.fontFamily.bodySemiBold,
     textAlign: 'center',
+    letterSpacing: 0.2,
   },
   smText: {
     fontSize: typography.fontSize.sm,
