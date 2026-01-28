@@ -4,9 +4,12 @@ import {
   getInstantReframe,
   generatePermissionSlip,
   generateMicroActions,
+  generateMicroActionsFromConversation,
+  generateInlineChatAction,
   continueConversation,
   PermissionSlipData,
   MicroActionData,
+  ChatActionSuggestion,
   PermissionSlipStyle,
   getPermissionSlipStyle,
 } from '@/services/aiService';
@@ -205,7 +208,9 @@ export function useMicroActions() {
   const [actions, setActions] = useState<MicroActionData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extractedContext, setExtractedContext] = useState<string | null>(null);
 
+  // Generate actions from a dream/goal string
   const generateActions = useCallback(async (
     dream: string,
     stuckPoint?: string,
@@ -214,6 +219,7 @@ export function useMicroActions() {
     setIsLoading(true);
     setError(null);
     setActions([]);
+    setExtractedContext(null);
 
     try {
       // Pass completed count for context-aware generation
@@ -230,16 +236,96 @@ export function useMicroActions() {
     }
   }, []);
 
+  // Generate actions from conversation context - more personalized
+  const generateActionsFromChat = useCallback(async (
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    stuckPoint?: string,
+    completedActionsCount: number = 0
+  ) => {
+    if (messages.length === 0) {
+      setError('No conversation to analyze');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setActions([]);
+    setExtractedContext(null);
+
+    try {
+      const response = await generateMicroActionsFromConversation(
+        messages,
+        stuckPoint,
+        completedActionsCount
+      );
+      if (response.success && response.actions) {
+        setActions(response.actions);
+        setExtractedContext(response.extractedContext || null);
+      } else {
+        setError(response.error || 'Failed to generate contextual actions');
+      }
+    } catch (err) {
+      setError('Failed to generate contextual actions. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const clearActions = useCallback(() => {
     setActions([]);
     setError(null);
+    setExtractedContext(null);
   }, []);
 
   return {
     actions,
     isLoading,
     error,
+    extractedContext,
     generateActions,
+    generateActionsFromChat,
     clearActions,
+  };
+}
+
+// Hook for inline chat action suggestions
+export function useChatActionSuggestion() {
+  const [suggestion, setSuggestion] = useState<ChatActionSuggestion | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const generateSuggestion = useCallback(async (
+    userMessage: string,
+    stuckPoint?: string
+  ) => {
+    setIsLoading(true);
+    setError(null);
+    setSuggestion(null);
+
+    try {
+      const response = await generateInlineChatAction(userMessage, stuckPoint);
+      if (response.success && response.action) {
+        setSuggestion(response.action);
+      } else {
+        setError(response.error || 'Failed to generate suggestion');
+      }
+    } catch (err) {
+      setError('Failed to generate action suggestion.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const clearSuggestion = useCallback(() => {
+    setSuggestion(null);
+    setError(null);
+  }, []);
+
+  return {
+    suggestion,
+    isLoading,
+    error,
+    generateSuggestion,
+    clearSuggestion,
   };
 }

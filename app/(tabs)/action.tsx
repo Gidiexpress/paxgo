@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, typography, spacing, shadows } from '@/constants/theme';
+import { colors, typography, spacing, shadows, borderRadius } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -30,9 +31,9 @@ export default function ActionScreen() {
   const insets = useSafeAreaInsets();
 
   const { user } = useUser();
-  const { actions, addAction, completeAction, getTodayActions, loading: actionsLoading } = useActions();
+  const { addAction, completeAction, getTodayActions, syncPendingChatActions, refreshActions, loading: actionsLoading } = useActions();
   const { incrementCompletedActions } = useDreamProgress();
-  const { deepDive, hasActiveDeepDive, endDeepDive } = useDeepDive();
+  const { deepDive, hasActiveDeepDive } = useDeepDive();
   const { isPremium } = useSubscription();
   const { actions: aiActions, isLoading: aiLoading, generateActions } = useMicroActions();
 
@@ -40,6 +41,23 @@ export default function ActionScreen() {
   const [todayActions, setTodayActions] = useState<MicroAction[]>([]);
   const [deepDiveAction, setDeepDiveAction] = useState<MicroAction | null>(null);
   const [showDeepDiveModal, setShowDeepDiveModal] = useState(false);
+  const [syncedCount, setSyncedCount] = useState(0);
+
+  // Sync pending chat actions when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const syncFromChat = async () => {
+        const count = await syncPendingChatActions();
+        if (count > 0) {
+          setSyncedCount(count);
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          // Refresh to show synced actions
+          await refreshActions();
+        }
+      };
+      syncFromChat();
+    }, [syncPendingChatActions, refreshActions])
+  );
 
   // Load or generate today's actions
   useEffect(() => {
@@ -152,6 +170,24 @@ export default function ActionScreen() {
           />
         </View>
       </LinearGradient>
+
+      {/* Synced from Chat Banner */}
+      {syncedCount > 0 && (
+        <Animated.View entering={FadeIn} style={styles.syncedBanner}>
+          <View style={styles.syncedContent}>
+            <Text style={styles.syncedIcon}>✨</Text>
+            <Text style={styles.syncedText}>
+              {syncedCount} action{syncedCount !== 1 ? 's' : ''} added from your chat
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setSyncedCount(0)}
+            style={styles.dismissButton}
+          >
+            <Text style={styles.dismissText}>×</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* Active Deep Dive Banner */}
       {hasActiveDeepDive && deepDive && !showDeepDiveModal && (
@@ -372,5 +408,43 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontWeight: '300',
     marginTop: -2,
+  },
+  syncedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.champagneGold + '20',
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.champagneGold + '40',
+  },
+  syncedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  syncedIcon: {
+    fontSize: 16,
+  },
+  syncedText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.terracottaDark,
+    flex: 1,
+  },
+  dismissButton: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dismissText: {
+    fontSize: 18,
+    color: colors.gray500,
+    fontWeight: '300',
   },
 });

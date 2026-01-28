@@ -36,6 +36,7 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   const recordingRef = useRef<Audio.Recording | null>(null);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isRecordingRef = useRef(false); // Track recording state without re-renders
+  const isOperationInProgress = useRef(false); // Mutex to prevent concurrent operations
 
   const { transcribeAudio, isLoading: isTranscribing, error, reset: resetTranscription } = useAudioTranscription({
     onSuccess: (text) => {
@@ -64,6 +65,9 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   useEffect(() => {
     initializeAudio();
     return () => {
+      // Reset all refs and cleanup
+      isRecordingRef.current = false;
+      isOperationInProgress.current = false;
       cleanupRecording();
     };
   }, []);
@@ -90,22 +94,41 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
     }
   }, []);
 
-  // Cleanup function for recording resources
-  const cleanupRecording = useCallback(async () => {
+  // Robust cleanup function for recording resources
+  const cleanupRecording = useCallback(async (recording?: Audio.Recording | null) => {
+    // Clear any active interval
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
       durationIntervalRef.current = null;
     }
-    if (recordingRef.current) {
+
+    // Use provided recording or the current ref
+    const recordingToCleanup = recording || recordingRef.current;
+
+    if (recordingToCleanup) {
       try {
-        const status = await recordingRef.current.getStatusAsync();
-        if (status.isRecording) {
-          await recordingRef.current.stopAndUnloadAsync();
+        // Always attempt to stop and unload, regardless of current state
+        // This handles all states: prepared, recording, stopped, etc.
+        await recordingToCleanup.stopAndUnloadAsync();
+      } catch (err) {
+        // Recording might be in a state where stopAndUnloadAsync fails
+        // Try alternative cleanup approaches
+        try {
+          // If stop failed, maybe it's not recording - just try to unload
+          const status = await recordingToCleanup.getStatusAsync();
+          if (status.canRecord && !status.isRecording) {
+            // It's prepared but not recording - try to unload by stopping
+            await recordingToCleanup.stopAndUnloadAsync();
+          }
+        } catch {
+          // Final fallback - recording is likely already unloaded
         }
-      } catch {
-        // Recording may already be unloaded
       }
-      recordingRef.current = null;
+
+      // Only clear the ref if we're cleaning up the current recording
+      if (!recording || recording === recordingRef.current) {
+        recordingRef.current = null;
+      }
     }
   }, []);
 
@@ -160,16 +183,20 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   }, [isRecording]);
 
   const startRecording = async () => {
-    // Prevent double-starts
-    if (isRecordingRef.current || isInitializing) {
+    // Prevent double-starts or concurrent operations
+    if (isRecordingRef.current || isInitializing || isOperationInProgress.current) {
       return;
     }
+
+    // Set mutex to prevent concurrent operations
+    isOperationInProgress.current = true;
 
     // Check permissions if not already granted
     if (permissionStatus !== 'granted') {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         setPermissionStatus('denied');
+        isOperationInProgress.current = false;
         return;
       }
       setPermissionStatus('granted');
@@ -187,21 +214,57 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
+        setAudioReady(true);
       }
 
-      // Clean up any existing recording first
+      // CRITICAL: Clean up any existing recording first with robust cleanup
       if (recordingRef.current) {
-        try {
-          await recordingRef.current.stopAndUnloadAsync();
-        } catch {
-          // Ignore cleanup errors
-        }
+        await cleanupRecording(recordingRef.current);
         recordingRef.current = null;
+        // Small delay to ensure system is fully released
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       // Create and start new recording
       const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+
+      try {
+        await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      } catch (prepareError) {
+        // If prepare fails, the system might need a reset
+        console.warn('Prepare failed, resetting audio:', prepareError);
+
+        // Reset audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
+        // Try once more with a fresh recording object
+        const freshRecording = new Audio.Recording();
+        await freshRecording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+        await freshRecording.startAsync();
+
+        recordingRef.current = freshRecording;
+        isRecordingRef.current = true;
+        setIsRecording(true);
+        setRecordingDuration(0);
+        setIsInitializing(false);
+        isOperationInProgress.current = false;
+
+        // Start duration counter
+        durationIntervalRef.current = setInterval(() => {
+          setRecordingDuration(prev => prev + 1);
+        }, 1000);
+
+        return;
+      }
+
       await recording.startAsync();
 
       recordingRef.current = recording;
@@ -209,6 +272,7 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
       setIsRecording(true);
       setRecordingDuration(0);
       setIsInitializing(false);
+      isOperationInProgress.current = false;
 
       // Start duration counter
       durationIntervalRef.current = setInterval(() => {
@@ -220,13 +284,24 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
       setIsInitializing(false);
       isRecordingRef.current = false;
       setIsRecording(false);
+      isOperationInProgress.current = false;
+
+      // Clean up any partial recording
+      if (recordingRef.current) {
+        await cleanupRecording(recordingRef.current);
+        recordingRef.current = null;
+      }
 
       // Provide subtle feedback but don't alarm the user
-      // The recording simply didn't start - they can try again
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
       // Reset audio system for next attempt
       try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
+        await new Promise(resolve => setTimeout(resolve, 50));
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
@@ -234,18 +309,25 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
         setAudioReady(true);
       } catch {
         // Silent fail - will retry on next press
+        setAudioReady(false);
       }
     }
   };
 
   const stopRecording = async () => {
-    // Only proceed if we're actually recording
+    // Only proceed if we're actually recording or have a recording object
     if (!isRecordingRef.current && !recordingRef.current) {
       setIsInitializing(false);
+      isOperationInProgress.current = false;
       return;
     }
 
     const currentDuration = recordingDuration;
+    const currentRecording = recordingRef.current;
+
+    // Immediately mark as no longer recording to prevent state issues
+    isRecordingRef.current = false;
+    recordingRef.current = null;
 
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -256,48 +338,62 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
         durationIntervalRef.current = null;
       }
 
-      // Update state
-      isRecordingRef.current = false;
+      // Update UI state
       setIsRecording(false);
       setIsInitializing(false);
 
-      // Get and process recording
-      if (recordingRef.current) {
+      // Get URI before stopping (more reliable)
+      let uri: string | null = null;
+      if (currentRecording) {
         try {
-          const status = await recordingRef.current.getStatusAsync();
-          if (status.isRecording) {
-            await recordingRef.current.stopAndUnloadAsync();
-          }
+          uri = currentRecording.getURI();
         } catch {
-          // Recording may have issues, but try to get URI anyway
+          // URI might not be available yet
         }
 
-        const uri = recordingRef.current.getURI();
-        recordingRef.current = null;
-
-        // Only transcribe if we have a valid recording of sufficient length
-        if (uri && currentDuration >= 1) {
-          // Reset any previous transcription errors before new attempt
-          resetTranscription?.();
-          await transcribeAudio({ audioUri: uri, language: 'en' });
-        } else if (currentDuration < 1) {
-          // Recording was too short - subtle feedback
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        // Stop and unload the recording
+        try {
+          await currentRecording.stopAndUnloadAsync();
+        } catch (stopErr) {
+          // Try to get URI after stop attempt if we didn't get it before
+          if (!uri) {
+            try {
+              uri = currentRecording.getURI();
+            } catch {
+              // Final URI attempt failed
+            }
+          }
         }
       }
 
-      setRecordingDuration(0);
+      // Only transcribe if we have a valid recording of sufficient length
+      if (uri && currentDuration >= 1) {
+        // Reset any previous transcription errors before new attempt
+        resetTranscription?.();
+        await transcribeAudio({ audioUri: uri, language: 'en' });
+      } else if (currentDuration < 1 && currentDuration > 0) {
+        // Recording was too short - subtle feedback
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
 
-      // Keep audio mode ready for next recording (smoother UX)
-      // Only reset if we need to play audio elsewhere
+      setRecordingDuration(0);
+      isOperationInProgress.current = false;
 
     } catch (err) {
       console.warn('Recording stop issue:', err);
-      isRecordingRef.current = false;
       setIsRecording(false);
       setIsInitializing(false);
       setRecordingDuration(0);
-      recordingRef.current = null;
+      isOperationInProgress.current = false;
+
+      // Ensure cleanup of the recording object
+      if (currentRecording) {
+        try {
+          await currentRecording.stopAndUnloadAsync();
+        } catch {
+          // Ignore - best effort cleanup
+        }
+      }
     }
   };
 

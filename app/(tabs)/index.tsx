@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -25,9 +25,12 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PermissionSlip } from '@/components/PermissionSlip';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { useUser } from '@/hooks/useStorage';
-import { useInstantReframe, usePermissionSlip, useMicroActions } from '@/hooks/useAI';
+import { ChatActionCard } from '@/components/ChatActionCard';
+import { DeepDiveModal } from '@/components/DeepDiveModal';
+import { useUser, useActions, useChatActionsSync } from '@/hooks/useStorage';
+import { useInstantReframe, usePermissionSlip, useMicroActions, useChatActionSuggestion } from '@/hooks/useAI';
 import { useSubscription } from '@/hooks/useSubscription';
+import { MicroAction } from '@/types';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -35,12 +38,33 @@ export default function HomeScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const { user } = useUser();
+  const { addAction } = useActions();
+  const { savePendingActions } = useChatActionsSync();
   const { isPremium, canUseAI, remainingAIUses, incrementAIUsage } = useSubscription();
-  const { messages, isLoading, error, sendMessage, clearChat } = useInstantReframe();
+  const { messages, isLoading, sendMessage } = useInstantReframe();
   const { slip, isLoading: slipLoading, generateSlip } = usePermissionSlip();
-  const { actions, isLoading: actionsLoading, generateActions } = useMicroActions();
+  const { actions, isLoading: actionsLoading, generateActionsFromChat } = useMicroActions();
+  const { suggestion, isLoading: suggestionLoading, generateSuggestion, clearSuggestion } = useChatActionSuggestion();
 
   const [inputText, setInputText] = useState('');
+  const [showDeepDiveModal, setShowDeepDiveModal] = useState(false);
+  const [deepDiveAction, setDeepDiveAction] = useState<MicroAction | null>(null);
+  const [savedActionId, setSavedActionId] = useState<string | null>(null);
+
+  // Auto-generate action suggestion after a meaningful exchange (3+ messages with fears/goals)
+  useEffect(() => {
+    const userMessages = messages.filter(m => m.role === 'user');
+    // Only trigger after sufficient conversation and if no current suggestion
+    if (userMessages.length >= 2 && !suggestion && !suggestionLoading && !isLoading) {
+      const lastUserMessage = userMessages[userMessages.length - 1]?.content;
+      // Check if user shared something meaningful (not just a greeting)
+      const hasFearOrGoal = /\b(afraid|scared|want|need|trying|stuck|wish|dream|goal|hope)\b/i.test(lastUserMessage);
+      if (hasFearOrGoal) {
+        // Generate an inline action suggestion
+        generateSuggestion(lastUserMessage, user?.stuckPoint);
+      }
+    }
+  }, [messages]);
 
   const handleSendMessage = async (messageText?: string) => {
     const textToSend = messageText || inputText.trim();
@@ -50,6 +74,10 @@ export default function HomeScreen() {
       router.push('/paywall');
       return;
     }
+
+    // Clear any existing suggestion when user sends new message
+    clearSuggestion();
+    setSavedActionId(null);
 
     setInputText('');
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -74,7 +102,82 @@ export default function HomeScreen() {
     if (lastUserMessage) {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await generateSlip(lastUserMessage.content);
-      await generateActions(user?.dream || 'personal growth', user?.stuckPoint);
+      // Use contextual generation based on full conversation
+      await generateActionsFromChat(
+        messages.map(m => ({ role: m.role, content: m.content })),
+        user?.stuckPoint
+      );
+    }
+  };
+
+  // Save generated actions for sync when they're created
+  useEffect(() => {
+    if (actions.length > 0) {
+      const actionsForSync = actions.map(action => ({
+        title: action.title,
+        description: action.description,
+        duration: action.duration,
+        category: action.category,
+        isPremium: action.category === 'connection' || action.category === 'action',
+        isCompleted: false,
+        dreamId: user?.dream || 'chat',
+      }));
+      savePendingActions(actionsForSync);
+    }
+  }, [actions, user?.dream, savePendingActions]);
+
+  // Handle starting an action from chat (opens Deep Dive modal)
+  const handleStartChatAction = useCallback(async () => {
+    if (!suggestion) return;
+
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Create a MicroAction object for the Deep Dive modal
+    const actionForDeepDive: MicroAction = {
+      id: suggestion.id,
+      title: suggestion.title,
+      description: suggestion.description,
+      duration: suggestion.duration,
+      category: suggestion.category,
+      isPremium: false,
+      isCompleted: false,
+      dreamId: user?.dream || 'chat',
+    };
+
+    setDeepDiveAction(actionForDeepDive);
+    setShowDeepDiveModal(true);
+  }, [suggestion, user?.dream]);
+
+  // Handle saving chat action to Action tab
+  const handleSaveChatAction = useCallback(async () => {
+    if (!suggestion) return;
+
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Save the action to storage
+    const savedAction = await addAction({
+      title: suggestion.title,
+      description: suggestion.description,
+      duration: suggestion.duration,
+      isPremium: false,
+      isCompleted: false,
+      category: suggestion.category as MicroAction['category'],
+      dreamId: user?.dream || 'chat',
+    });
+
+    setSavedActionId(savedAction.id);
+  }, [suggestion, addAction, user?.dream]);
+
+  // Handle Deep Dive completion
+  const handleDeepDiveComplete = async () => {
+    if (deepDiveAction) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // If this was a suggestion, mark it as done
+      if (deepDiveAction.id === suggestion?.id) {
+        clearSuggestion();
+      }
+      setShowDeepDiveModal(false);
+      setDeepDiveAction(null);
     }
   };
 
@@ -177,11 +280,36 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
+          {/* Inline Chat Action Suggestion */}
+          {suggestion && !savedActionId && !isLoading && (
+            <ChatActionCard
+              action={suggestion}
+              onStartNow={handleStartChatAction}
+              onSaveForLater={handleSaveChatAction}
+            />
+          )}
+
+          {/* Saved action confirmation */}
+          {savedActionId && (
+            <Animated.View entering={FadeIn} style={styles.savedConfirmation}>
+              <View style={styles.savedContent}>
+                <Text style={styles.savedIcon}>✓</Text>
+                <Text style={styles.savedText}>Added to your Actions</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/action')}
+                style={styles.viewActionsLink}
+              >
+                <Text style={styles.viewActionsLinkText}>View →</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+
           {/* Generate Micro-Action Button */}
-          {messages.length > 0 && !isLoading && (
+          {messages.length > 0 && !isLoading && !suggestion && !savedActionId && (
             <Animated.View entering={FadeIn} style={styles.actionPromptContainer}>
               <Button
-                title="Generate Micro-Action ↗"
+                title="Generate Micro-Actions ↗"
                 onPress={handleGenerateMicroAction}
                 variant="primary"
                 size="md"
@@ -269,6 +397,17 @@ export default function HomeScreen() {
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Deep Dive Modal for chat actions */}
+      <DeepDiveModal
+        visible={showDeepDiveModal}
+        action={deepDiveAction}
+        onClose={() => {
+          setShowDeepDiveModal(false);
+          setDeepDiveAction(null);
+        }}
+        onComplete={handleDeepDiveComplete}
+      />
     </View>
   );
 }
@@ -463,6 +602,39 @@ const styles = StyleSheet.create({
   },
   viewActionsButton: {
     marginTop: spacing.sm,
+  },
+  savedConfirmation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.tealLight,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginVertical: spacing.md,
+  },
+  savedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  savedIcon: {
+    fontSize: 16,
+    color: colors.tealDark,
+    fontWeight: 'bold',
+  },
+  savedText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.tealDark,
+  },
+  viewActionsLink: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  viewActionsLinkText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.tealDark,
   },
   inputContainer: {
     padding: spacing.md,

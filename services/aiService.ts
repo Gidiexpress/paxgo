@@ -605,3 +605,219 @@ export function getPermissionSlipStyle(category?: string): PermissionSlipStyle {
 
   return styleMap[category || ''] || 'classic';
 }
+
+// Context-Aware Micro-Actions from Conversation
+// Generates personalized actions based on what the user has shared in chat
+export async function generateMicroActionsFromConversation(
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  stuckPoint?: string,
+  completedActionsCount: number = 0
+): Promise<{
+  success: boolean;
+  actions?: MicroActionData[];
+  extractedContext?: string;
+  error?: string;
+}> {
+  try {
+    // First, extract the key themes and concerns from conversation
+    const userMessages = messages.filter(m => m.role === 'user').map(m => m.content);
+    const conversationText = userMessages.join('\n');
+
+    // Build a rich understanding of what the user has shared
+    const contextPrompt = `Analyze this conversation to understand what the user is working through:
+
+${conversationText}
+
+Extract in JSON format:
+{
+  "mainConcern": "The primary fear, goal, or struggle they expressed",
+  "emotionalState": "How they seem to be feeling (anxious, hopeful, stuck, curious, etc.)",
+  "readinessLevel": "low|medium|high - How ready do they seem to take action?",
+  "themes": ["theme1", "theme2"] // Key themes from their messages
+}`;
+
+    const contextResponse = await generateText({ prompt: contextPrompt });
+
+    let extractedContext = '';
+    let mainConcern = '';
+    let readinessLevel = 'medium';
+    let emotionalState = 'curious';
+
+    try {
+      const contextMatch = contextResponse?.match(/\{[\s\S]*\}/);
+      if (contextMatch) {
+        const contextData = JSON.parse(contextMatch[0]);
+        mainConcern = contextData.mainConcern || '';
+        readinessLevel = contextData.readinessLevel || 'medium';
+        emotionalState = contextData.emotionalState || 'curious';
+        extractedContext = mainConcern;
+      }
+    } catch {
+      // Use the last user message as fallback
+      mainConcern = userMessages[userMessages.length - 1] || 'personal growth';
+      extractedContext = mainConcern;
+    }
+
+    // Adjust the action generation based on emotional state and readiness
+    let readinessInstruction = '';
+    if (readinessLevel === 'low' || emotionalState === 'anxious' || emotionalState === 'overwhelmed') {
+      readinessInstruction = `
+IMPORTANT: The user seems ${emotionalState} and may not be ready for big steps.
+Generate ONLY gentle, nurturing actions. Focus on:
+- Self-compassion exercises
+- Tiny research or reflection tasks
+- Actions that feel like self-care, not challenges
+- Maximum difficulty level of 1`;
+    } else if (readinessLevel === 'high' || emotionalState === 'excited' || emotionalState === 'determined') {
+      readinessInstruction = `
+IMPORTANT: The user seems ${emotionalState} and ready to take action!
+Generate actions that channel this energy:
+- Include one bold, exciting action
+- Mix practical steps with inspiring ones
+- Include a connection or outward action
+- Range difficulty from 1 to 3`;
+    } else {
+      readinessInstruction = `
+The user seems ${emotionalState}. Generate a balanced mix of gentle and slightly challenging actions.
+Start gentle, build to moderate boldness. Difficulty levels 1-2.`;
+    }
+
+    const contextAwarePrompt = getContextAwareMicroActionPrompt(completedActionsCount);
+    const stuckPointContext = stuckPoint
+      ? `\nUser's general focus area: ${stuckPoint}`
+      : '';
+
+    const prompt = `${contextAwarePrompt}
+
+CONVERSATION CONTEXT:
+What the user has shared: "${mainConcern}"
+Their apparent emotional state: ${emotionalState}
+${stuckPointContext}
+${readinessInstruction}
+
+Based on what THIS SPECIFIC USER has shared in conversation, generate personalized micro-actions that feel directly relevant to THEIR situation, not generic goals.
+
+Generate micro-actions JSON array that feel luxurious, intentional, and specifically tailored:`;
+
+    const response = await generateText({ prompt });
+
+    // Parse JSON array from response
+    const jsonMatch = response?.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const actions = JSON.parse(jsonMatch[0]) as MicroActionData[];
+      return {
+        success: true,
+        actions: actions.map((a, i) => ({
+          ...a,
+          difficultyLevel: a.difficultyLevel || Math.min(i + 1, 3)
+        })),
+        extractedContext,
+      };
+    }
+
+    // Contextual fallback based on what we extracted
+    return {
+      success: true,
+      actions: [
+        {
+          title: 'Acknowledge where you are right now',
+          description: `Take a moment to write down one thing you appreciate about yourself in this moment, even amid ${emotionalState === 'anxious' ? 'uncertainty' : 'change'}.`,
+          duration: 5,
+          category: 'reflection',
+          difficultyLevel: 1,
+        },
+        {
+          title: 'Find one spark of clarity',
+          description: `Based on what's on your mind, search for one image, quote, or story that resonates with where you want to go.`,
+          duration: 5,
+          category: 'research',
+          difficultyLevel: 1,
+        },
+        {
+          title: 'Take one tiny step forward',
+          description: `Choose the smallest possible action related to what you shared. Something you could do in the next 5 minutes that moves the needle just a tiny bit.`,
+          duration: 5,
+          category: 'action',
+          difficultyLevel: 2,
+        },
+      ],
+      extractedContext,
+    };
+  } catch (error) {
+    console.error('Contextual micro-action error:', error);
+    return {
+      success: false,
+      error: 'Unable to generate contextual micro-actions. Please try again.',
+    };
+  }
+}
+
+// Interface for action suggestions in chat
+export interface ChatActionSuggestion {
+  id: string;
+  title: string;
+  description: string;
+  duration: number;
+  category: string;
+}
+
+// Generate inline action suggestion for chat (single action based on last message)
+export async function generateInlineChatAction(
+  userMessage: string,
+  stuckPoint?: string
+): Promise<{
+  success: boolean;
+  action?: ChatActionSuggestion;
+  error?: string;
+}> {
+  try {
+    const prompt = `${MICRO_ACTION_PROMPT}
+
+The user just shared: "${userMessage}"
+${stuckPoint ? `Their focus area: ${stuckPoint}` : ''}
+
+Generate ONE micro-action (in JSON) that directly addresses what they just shared.
+This action should feel like an immediate, empowering response to their message.
+Keep it achievable in 5 minutes and make it feel like a gift, not a task.
+
+Respond with a single JSON object (not an array):
+{
+  "title": "Elegant action title",
+  "description": "Specific, encouraging description",
+  "duration": 5,
+  "category": "research|planning|action|reflection|connection"
+}`;
+
+    const response = await generateText({ prompt });
+
+    const jsonMatch = response?.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const action = JSON.parse(jsonMatch[0]);
+      return {
+        success: true,
+        action: {
+          id: `chat-action-${Date.now()}`,
+          ...action,
+        },
+      };
+    }
+
+    // Fallback
+    return {
+      success: true,
+      action: {
+        id: `chat-action-${Date.now()}`,
+        title: 'Take one bold breath',
+        description: 'Close your eyes, take three deep breaths, and on each exhale, release one worry about what you just shared.',
+        duration: 2,
+        category: 'reflection',
+      },
+    };
+  } catch (error) {
+    console.error('Inline chat action error:', error);
+    return {
+      success: false,
+      error: 'Unable to generate action suggestion.',
+    };
+  }
+}

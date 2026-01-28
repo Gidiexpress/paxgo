@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   ONBOARDING_COMPLETE: '@paxgo_onboarding_complete',
   CHAT_HISTORY: '@paxgo_chat_history',
   DEEP_DIVE: '@paxgo_deep_dive',
+  CHAT_GENERATED_ACTIONS: '@paxgo_chat_generated_actions',
 };
 
 export function useStorage<T>(key: string, initialValue: T) {
@@ -99,6 +100,7 @@ export function useActions() {
     STORAGE_KEYS.ACTIONS,
     []
   );
+  const [lastSyncTime, setLastSyncTime] = useState<number>(0);
 
   const addAction = useCallback(
     async (action: Omit<MicroAction, 'id'>) => {
@@ -108,6 +110,19 @@ export function useActions() {
       };
       await setActions((prev) => [...prev, newAction]);
       return newAction;
+    },
+    [setActions]
+  );
+
+  // Add multiple actions at once (for chat-generated actions)
+  const addMultipleActions = useCallback(
+    async (newActions: Array<Omit<MicroAction, 'id'>>) => {
+      const actionsWithIds: MicroAction[] = newActions.map((action, index) => ({
+        ...action,
+        id: `${Date.now()}-${index}`,
+      }));
+      await setActions((prev) => [...prev, ...actionsWithIds]);
+      return actionsWithIds;
     },
     [setActions]
   );
@@ -140,15 +155,95 @@ export function useActions() {
     );
   }, [actions]);
 
+  // Sync pending actions from chat
+  const syncPendingChatActions = useCallback(async () => {
+    try {
+      const pendingStr = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_GENERATED_ACTIONS);
+      if (pendingStr) {
+        const pending = JSON.parse(pendingStr) as Array<Omit<MicroAction, 'id'>>;
+        if (pending.length > 0) {
+          await addMultipleActions(pending);
+          // Clear pending after sync
+          await AsyncStorage.removeItem(STORAGE_KEYS.CHAT_GENERATED_ACTIONS);
+          setLastSyncTime(Date.now());
+          return pending.length;
+        }
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error syncing chat actions:', error);
+      return 0;
+    }
+  }, [addMultipleActions]);
+
+  // Force refresh actions from storage
+  const refreshActions = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.ACTIONS);
+      if (stored) {
+        setActions(JSON.parse(stored));
+      }
+      setLastSyncTime(Date.now());
+    } catch (error) {
+      console.error('Error refreshing actions:', error);
+    }
+  }, [setActions]);
+
   return {
     actions,
     setActions,
     addAction,
+    addMultipleActions,
     completeAction,
     getActiveActions,
     getCompletedActions,
     getTodayActions,
+    syncPendingChatActions,
+    refreshActions,
+    lastSyncTime,
     loading,
+  };
+}
+
+// Hook to save chat-generated actions for sync
+export function useChatActionsSync() {
+  const savePendingActions = useCallback(
+    async (actions: Array<Omit<MicroAction, 'id'>>) => {
+      try {
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.CHAT_GENERATED_ACTIONS,
+          JSON.stringify(actions)
+        );
+        return true;
+      } catch (error) {
+        console.error('Error saving pending chat actions:', error);
+        return false;
+      }
+    },
+    []
+  );
+
+  const clearPendingActions = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.CHAT_GENERATED_ACTIONS);
+    } catch (error) {
+      console.error('Error clearing pending chat actions:', error);
+    }
+  }, []);
+
+  const hasPendingActions = useCallback(async () => {
+    try {
+      const pending = await AsyncStorage.getItem(STORAGE_KEYS.CHAT_GENERATED_ACTIONS);
+      return pending !== null && JSON.parse(pending).length > 0;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  return {
+    savePendingActions,
+    clearPendingActions,
+    hasPendingActions,
   };
 }
 
