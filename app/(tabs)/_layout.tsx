@@ -20,6 +20,9 @@ function TabIcon({ icon, label, focused, color }: TabIconProps) {
           styles.tabLabel,
           { color, fontFamily: focused ? typography.fontFamily.bodySemiBold : typography.fontFamily.body },
         ]}
+        numberOfLines={1}
+        adjustsFontSizeToFit={false}
+        allowFontScaling={false}
       >
         {label}
       </Text>
@@ -98,12 +101,16 @@ const styles = StyleSheet.create({
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    minWidth: 60,
+    paddingHorizontal: 4,
   },
   tabIcon: {
-    fontSize: 20,
+    fontSize: 22,
+    marginBottom: 2,
   },
   tabLabel: {
-    fontSize: typography.fontSize.xs,
+    fontSize: 11,
+    letterSpacing: -0.2,
+    textAlign: 'center',
   },
 });

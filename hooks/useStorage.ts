@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { User, MicroAction, ProofEntry, PermissionSlip, DreamProgress } from '@/types';
+import { User, MicroAction, ProofEntry, PermissionSlip, DreamProgress, DeepDiveProgress } from '@/types';
 
 const STORAGE_KEYS = {
   USER: '@paxgo_user',
@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   DREAM_PROGRESS: '@paxgo_dream_progress',
   ONBOARDING_COMPLETE: '@paxgo_onboarding_complete',
   CHAT_HISTORY: '@paxgo_chat_history',
+  DEEP_DIVE: '@paxgo_deep_dive',
 };
 
 export function useStorage<T>(key: string, initialValue: T) {
@@ -279,4 +280,82 @@ export function useOnboarding() {
   }, [setIsComplete]);
 
   return { isComplete, completeOnboarding, resetOnboarding, loading };
+}
+
+// Deep Dive Progress hook
+export function useDeepDive() {
+  const { value: deepDive, setValue: setDeepDive, loading } = useStorage<DeepDiveProgress | null>(
+    STORAGE_KEYS.DEEP_DIVE,
+    null
+  );
+
+  const startDeepDive = useCallback(
+    async (actionId: string, actionTitle: string) => {
+      const newDeepDive: DeepDiveProgress = {
+        actionId,
+        actionTitle,
+        tinySteps: [],
+        currentStepIndex: 0,
+        startedAt: new Date().toISOString(),
+        isActive: true,
+      };
+      await setDeepDive(newDeepDive);
+      return newDeepDive;
+    },
+    [setDeepDive]
+  );
+
+  const setTinySteps = useCallback(
+    async (steps: DeepDiveProgress['tinySteps']) => {
+      if (deepDive) {
+        await setDeepDive({
+          ...deepDive,
+          tinySteps: steps,
+        });
+      }
+    },
+    [deepDive, setDeepDive]
+  );
+
+  const completeCurrentStep = useCallback(async () => {
+    if (deepDive && deepDive.currentStepIndex < deepDive.tinySteps.length) {
+      const updatedSteps = [...deepDive.tinySteps];
+      updatedSteps[deepDive.currentStepIndex] = {
+        ...updatedSteps[deepDive.currentStepIndex],
+        isCompleted: true,
+        completedAt: new Date().toISOString(),
+      };
+
+      const nextIndex = deepDive.currentStepIndex + 1;
+      const isAllComplete = nextIndex >= deepDive.tinySteps.length;
+
+      await setDeepDive({
+        ...deepDive,
+        tinySteps: updatedSteps,
+        currentStepIndex: nextIndex,
+        completedAt: isAllComplete ? new Date().toISOString() : undefined,
+        isActive: !isAllComplete,
+      });
+
+      return isAllComplete;
+    }
+    return false;
+  }, [deepDive, setDeepDive]);
+
+  const endDeepDive = useCallback(async () => {
+    await setDeepDive(null);
+  }, [setDeepDive]);
+
+  const hasActiveDeepDive = deepDive?.isActive && deepDive.currentStepIndex < deepDive.tinySteps.length;
+
+  return {
+    deepDive,
+    setDeepDive,
+    startDeepDive,
+    setTinySteps,
+    completeCurrentStep,
+    endDeepDive,
+    hasActiveDeepDive,
+    loading,
+  };
 }

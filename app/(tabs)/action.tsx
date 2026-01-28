@@ -12,14 +12,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
+import { colors, typography, spacing, shadows } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { ActionCard } from '@/components/ActionCard';
+import { DeepDiveModal } from '@/components/DeepDiveModal';
+import { ActiveDeepDiveBanner } from '@/components/ActiveDeepDiveBanner';
 import { ConfettiAnimation } from '@/components/ConfettiAnimation';
-import { useUser, useActions, useDreamProgress, useProofs } from '@/hooks/useStorage';
+import { useUser, useActions, useDreamProgress, useDeepDive } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useMicroActions } from '@/hooks/useAI';
 import { MicroAction } from '@/types';
@@ -30,13 +31,15 @@ export default function ActionScreen() {
 
   const { user } = useUser();
   const { actions, addAction, completeAction, getTodayActions, loading: actionsLoading } = useActions();
-  const { progress, incrementCompletedActions } = useDreamProgress();
-  const { addProof } = useProofs();
-  const { isPremium, canAccessPremiumActions } = useSubscription();
+  const { incrementCompletedActions } = useDreamProgress();
+  const { deepDive, hasActiveDeepDive, endDeepDive } = useDeepDive();
+  const { isPremium } = useSubscription();
   const { actions: aiActions, isLoading: aiLoading, generateActions } = useMicroActions();
 
   const [showConfetti, setShowConfetti] = useState(false);
   const [todayActions, setTodayActions] = useState<MicroAction[]>([]);
+  const [deepDiveAction, setDeepDiveAction] = useState<MicroAction | null>(null);
+  const [showDeepDiveModal, setShowDeepDiveModal] = useState(false);
 
   // Load or generate today's actions
   useEffect(() => {
@@ -75,6 +78,18 @@ export default function ActionScreen() {
     saveAIActions();
   }, [aiActions]);
 
+  // Check for active deep dive on mount and auto-open modal
+  useEffect(() => {
+    if (hasActiveDeepDive && deepDive) {
+      const action = todayActions.find(a => a.id === deepDive.actionId);
+      if (action && !action.isCompleted) {
+        setDeepDiveAction(action);
+        // Small delay to let the screen render first
+        setTimeout(() => setShowDeepDiveModal(true), 500);
+      }
+    }
+  }, [hasActiveDeepDive, deepDive, todayActions]);
+
   const handleCompleteAction = async (actionId: string) => {
     await completeAction(actionId);
     await incrementCompletedActions();
@@ -94,6 +109,24 @@ export default function ActionScreen() {
       pathname: '/add-proof',
       params: { actionId: action.id, actionTitle: action.title },
     });
+  };
+
+  const handleOpenDeepDive = (action: MicroAction) => {
+    setDeepDiveAction(action);
+    setShowDeepDiveModal(true);
+  };
+
+  const handleDeepDiveComplete = async () => {
+    if (deepDiveAction) {
+      await handleCompleteAction(deepDiveAction.id);
+      setShowDeepDiveModal(false);
+      setDeepDiveAction(null);
+    }
+  };
+
+  const handleCloseDeepDive = () => {
+    setShowDeepDiveModal(false);
+    // Don't clear the action - progress is saved
   };
 
   const completedCount = todayActions.filter((a) => a.isCompleted).length;
@@ -120,6 +153,19 @@ export default function ActionScreen() {
         </View>
       </LinearGradient>
 
+      {/* Active Deep Dive Banner */}
+      {hasActiveDeepDive && deepDive && !showDeepDiveModal && (
+        <ActiveDeepDiveBanner
+          deepDive={deepDive}
+          onPress={() => {
+            const action = todayActions.find(a => a.id === deepDive.actionId);
+            if (action) {
+              handleOpenDeepDive(action);
+            }
+          }}
+        />
+      )}
+
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentInner}
@@ -136,29 +182,20 @@ export default function ActionScreen() {
           <>
             {todayActions.map((action, index) => (
               <Animated.View key={action.id} entering={FadeInDown.delay(index * 100)}>
-                {action.isPremium && !isPremium ? (
-                  <TouchableOpacity
-                    onPress={() => router.push('/paywall')}
-                    activeOpacity={0.9}
-                  >
-                    <Card variant="premium" style={styles.lockedCard}>
-                      <View style={styles.lockedHeader}>
-                        <Badge label="Premium Task" variant="premium" />
-                        <Text style={styles.lockIcon}>🔒</Text>
-                      </View>
-                      <Text style={styles.lockedTitle}>{action.title}</Text>
-                      <Text style={styles.lockedDescription}>
-                        Upgrade to unlock premium micro-actions
-                      </Text>
-                    </Card>
-                  </TouchableOpacity>
-                ) : (
-                  <ActionCard
-                    action={action}
-                    onComplete={handleCompleteAction}
-                    onPress={() => action.isCompleted && handleAddProof(action)}
-                  />
-                )}
+                <ActionCard
+                  action={action}
+                  onComplete={handleCompleteAction}
+                  onPress={() => {
+                    if (action.isCompleted) {
+                      handleAddProof(action);
+                    } else if (action.isPremium && !isPremium) {
+                      router.push('/paywall');
+                    }
+                  }}
+                  onDeepDive={() => handleOpenDeepDive(action)}
+                  hasActiveDeepDive={deepDive?.actionId === action.id && hasActiveDeepDive}
+                  isLocked={action.isPremium && !isPremium}
+                />
               </Animated.View>
             ))}
           </>
@@ -224,6 +261,14 @@ export default function ActionScreen() {
         active={showConfetti}
         onComplete={() => setShowConfetti(false)}
       />
+
+      {/* Deep Dive Modal */}
+      <DeepDiveModal
+        visible={showDeepDiveModal}
+        action={deepDiveAction}
+        onClose={handleCloseDeepDive}
+        onComplete={handleDeepDiveComplete}
+      />
     </View>
   );
 }
@@ -274,30 +319,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.gray600,
     marginTop: spacing.md,
-  },
-  lockedCard: {
-    marginBottom: spacing.md,
-    opacity: 0.8,
-  },
-  lockedHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  lockIcon: {
-    fontSize: 20,
-  },
-  lockedTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-    marginBottom: spacing.xs,
-  },
-  lockedDescription: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.sm,
-    color: colors.gray500,
   },
   generateMore: {
     marginTop: spacing.xl,

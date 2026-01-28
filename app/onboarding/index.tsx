@@ -9,6 +9,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -211,15 +212,42 @@ export default function OnboardingScreen() {
           <View style={styles.selectionContent}>
             <Text style={styles.stepTitle}>{item.title}</Text>
             <Text style={styles.stepSubtitle}>{item.subtitle}</Text>
-            <FlatList
-              data={stuckPoints}
-              renderItem={renderStuckPointItem}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              contentContainerStyle={styles.stuckPointGrid}
-              columnWrapperStyle={styles.stuckPointRow}
-              scrollEnabled={false}
-            />
+            <ScrollView
+              style={styles.stuckPointScroll}
+              contentContainerStyle={styles.stuckPointScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              decelerationRate="normal"
+            >
+              <View style={styles.stuckPointGrid}>
+                {stuckPoints.map((stuckPoint, idx) => {
+                  const isSelected = selectedStuckPoint === stuckPoint.id;
+                  return (
+                    <TouchableOpacity
+                      key={stuckPoint.id}
+                      style={[
+                        styles.stuckPointCard,
+                        isSelected && { borderColor: stuckPoint.color, borderWidth: 2 },
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setSelectedStuckPoint(stuckPoint.id);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.stuckPointEmoji}>{stuckPoint.emoji}</Text>
+                      <Text style={styles.stuckPointTitle}>{stuckPoint.title}</Text>
+                      <Text style={styles.stuckPointDescription}>{stuckPoint.description}</Text>
+                      {isSelected && (
+                        <View style={[styles.checkmark, { backgroundColor: stuckPoint.color }]}>
+                          <Text style={styles.checkmarkText}>✓</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
         )}
 
@@ -426,12 +454,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing['2xl'],
   },
-  stuckPointGrid: {
-    paddingBottom: spacing.xl,
+  stuckPointScroll: {
+    flex: 1,
   },
-  stuckPointRow: {
+  stuckPointScrollContent: {
+    paddingBottom: spacing['3xl'],
+  },
+  stuckPointGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    paddingBottom: spacing.xl,
   },
   stuckPointCard: {
     width: (width - spacing.xl * 2 - spacing.md) / 2,
@@ -439,6 +472,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     alignItems: 'center',
+    marginBottom: spacing.md,
     ...shadows.md,
     borderWidth: 2,
     borderColor: 'transparent',

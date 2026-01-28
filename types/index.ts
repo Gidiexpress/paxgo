@@ -21,6 +21,25 @@ export interface MicroAction {
   dreamId: string;
 }
 
+export interface TinyStep {
+  id: string;
+  title: string;
+  description: string;
+  isCompleted: boolean;
+  completedAt?: string;
+  order: number;
+}
+
+export interface DeepDiveProgress {
+  actionId: string;
+  actionTitle: string;
+  tinySteps: TinyStep[];
+  currentStepIndex: number;
+  startedAt: string;
+  completedAt?: string;
+  isActive: boolean;
+}
+
 export interface ProofEntry {
   id: string;
   actionId: string;

@@ -16,14 +16,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeInDown,
-  FadeOut,
+  FadeInUp,
+  SlideInRight,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { PermissionSlip } from '@/components/PermissionSlip';
+import { VoiceRecorder } from '@/components/VoiceRecorder';
 import { useUser } from '@/hooks/useStorage';
 import { useInstantReframe, usePermissionSlip, useMicroActions } from '@/hooks/useAI';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -41,24 +42,29 @@ export default function HomeScreen() {
 
   const [inputText, setInputText] = useState('');
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || isLoading) return;
+  const handleSendMessage = async (messageText?: string) => {
+    const textToSend = messageText || inputText.trim();
+    if (!textToSend || isLoading) return;
 
     if (!canUseAI) {
       router.push('/paywall');
       return;
     }
 
-    const message = inputText.trim();
     setInputText('');
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await sendMessage(message);
+    await sendMessage(textToSend);
     await incrementAIUsage();
 
     // Scroll to bottom
     setTimeout(() => {
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  };
+
+  const handleVoiceTranscription = async (transcribedText: string) => {
+    // Send the transcribed text directly to Gabby
+    await handleSendMessage(transcribedText);
   };
 
   const handleGenerateMicroAction = async () => {
@@ -187,7 +193,7 @@ export default function HomeScreen() {
 
           {/* Permission Slip */}
           {slip && (
-            <Animated.View entering={FadeInDown}>
+            <Animated.View entering={FadeInUp.springify().damping(15).delay(200)}>
               <PermissionSlip
                 slip={{
                   id: Date.now().toString(),
@@ -201,23 +207,27 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {/* Generated Actions Preview */}
+          {/* Generated Actions Preview - Smooth transition from Permission Slip */}
           {actions.length > 0 && (
-            <Animated.View entering={FadeInDown} style={styles.actionsPreview}>
+            <Animated.View entering={SlideInRight.springify().damping(18).delay(slip ? 600 : 200)} style={styles.actionsPreview}>
               <Text style={styles.actionsPreviewTitle}>Your Micro-Actions</Text>
               {actions.slice(0, 2).map((action, index) => (
-                <Card key={index} style={styles.actionPreviewCard}>
-                  <Text style={styles.actionPreviewTitle}>{action.title}</Text>
-                  <Text style={styles.actionPreviewDuration}>⏱️ {action.duration} min</Text>
-                </Card>
+                <Animated.View key={index} entering={FadeInDown.delay(index * 150 + 300)}>
+                  <Card style={styles.actionPreviewCard}>
+                    <Text style={styles.actionPreviewCardTitle}>{action.title}</Text>
+                    <Text style={styles.actionPreviewDuration}>⏱️ {action.duration} min</Text>
+                  </Card>
+                </Animated.View>
               ))}
-              <Button
-                title="View All Actions"
-                onPress={() => router.push('/(tabs)/action')}
-                variant="outline"
-                size="sm"
-                style={styles.viewActionsButton}
-              />
+              <Animated.View entering={FadeIn.delay(800)}>
+                <Button
+                  title="View All Actions →"
+                  onPress={() => router.push('/(tabs)/action')}
+                  variant="primary"
+                  size="md"
+                  style={styles.viewActionsButton}
+                />
+              </Animated.View>
             </Animated.View>
           )}
         </ScrollView>
@@ -230,9 +240,15 @@ export default function HomeScreen() {
             </Text>
           )}
           <View style={styles.inputRow}>
+            {/* Voice Recorder */}
+            <VoiceRecorder
+              onTranscriptionComplete={handleVoiceTranscription}
+              disabled={isLoading || !canUseAI}
+            />
+
             <TextInput
               style={styles.textInput}
-              placeholder="Share what's holding you back..."
+              placeholder="Type or hold mic to speak..."
               placeholderTextColor={colors.gray400}
               value={inputText}
               onChangeText={setInputText}
@@ -241,7 +257,7 @@ export default function HomeScreen() {
             />
             <TouchableOpacity
               style={[styles.sendButton, (!inputText.trim() || isLoading) && styles.sendButtonDisabled]}
-              onPress={handleSendMessage}
+              onPress={() => handleSendMessage()}
               disabled={!inputText.trim() || isLoading}
             >
               {isLoading ? (
@@ -434,7 +450,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  actionPreviewTitle: {
+  actionPreviewCardTitle: {
     fontFamily: typography.fontFamily.bodyMedium,
     fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
