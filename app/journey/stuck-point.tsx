@@ -101,29 +101,37 @@ function CategoryCard({
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         activeOpacity={1}
-        style={[styles.cardTouchable, isSelected && styles.cardSelected]}
+        style={styles.cardTouchable}
       >
-        <LinearGradient
-          colors={category.gradient}
-          style={styles.cardGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          {/* Selection indicator */}
-          {isSelected && (
-            <View style={styles.selectedBadge}>
-              <Text style={styles.selectedBadgeText}>✓</Text>
+        {/* Selection border wrapper - always renders but with transparent border when not selected */}
+        <View style={[
+          styles.cardBorderWrapper,
+          isSelected && styles.cardBorderWrapperSelected
+        ]}>
+          <LinearGradient
+            colors={category.gradient}
+            style={styles.cardGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            {/* Selection indicator - champagne gold checkmark */}
+            {isSelected && (
+              <View style={styles.selectedBadge}>
+                <Text style={styles.selectedBadgeText}>✓</Text>
+              </View>
+            )}
+
+            {/* Card content - always visible */}
+            <View style={styles.cardContent}>
+              <Text style={styles.cardIcon}>{category.icon}</Text>
+              <Text style={styles.cardTitle}>{category.title}</Text>
+              <Text style={styles.cardDescription}>{category.description}</Text>
             </View>
-          )}
 
-          {/* Card content */}
-          <Text style={styles.cardIcon}>{category.icon}</Text>
-          <Text style={styles.cardTitle}>{category.title}</Text>
-          <Text style={styles.cardDescription}>{category.description}</Text>
-
-          {/* Decorative element */}
-          <View style={styles.cardDecoration} />
-        </LinearGradient>
+            {/* Decorative element */}
+            <View style={styles.cardDecoration} />
+          </LinearGradient>
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -290,11 +298,15 @@ const styles = StyleSheet.create({
   },
   cardTouchable: {
     borderRadius: borderRadius['2xl'],
-    overflow: 'hidden',
     ...shadows.lg,
   },
-  cardSelected: {
+  cardBorderWrapper: {
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
     borderWidth: 3,
+    borderColor: 'transparent', // Always have a border, but transparent when not selected
+  },
+  cardBorderWrapperSelected: {
     borderColor: colors.champagneGold,
   },
   cardGradient: {
@@ -302,20 +314,26 @@ const styles = StyleSheet.create({
     minHeight: 120,
     position: 'relative',
   },
+  cardContent: {
+    // Ensure content is always visible
+    zIndex: 1,
+  },
   selectedBadge: {
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.champagneGold,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
+    ...shadows.md,
   },
   selectedBadgeText: {
     color: colors.midnightNavy,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   cardIcon: {
