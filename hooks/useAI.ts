@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { useTextGeneration } from '@fastshot/ai';
 import {
   getInstantReframe,
   generatePermissionSlip,
@@ -7,16 +6,18 @@ import {
   continueConversation,
   PermissionSlipData,
   MicroActionData,
+  PermissionSlipStyle,
+  getPermissionSlipStyle,
 } from '@/services/aiService';
 import { ChatMessage } from '@/types';
 
-// Hook for Instant Reframe chat
-export function useInstantReframe() {
+// Hook for Instant Reframe chat with stuck point awareness
+export function useInstantReframe(stuckPoint?: string) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sendMessage = useCallback(async (userMessage: string) => {
+  const sendMessage = useCallback(async (userMessage: string, userStuckPoint?: string) => {
     setIsLoading(true);
     setError(null);
 
@@ -30,10 +31,13 @@ export function useInstantReframe() {
     setMessages((prev) => [...prev, userMsg]);
 
     try {
-      // Get AI response
+      // Use provided stuck point or default
+      const activeStuckPoint = userStuckPoint || stuckPoint;
+
+      // Get AI response with stuck point context
       const response = messages.length === 0
-        ? await getInstantReframe(userMessage)
-        : await continueConversation(messages, userMessage);
+        ? await getInstantReframe(userMessage, activeStuckPoint)
+        : await continueConversation(messages, userMessage, activeStuckPoint);
 
       if (response.success) {
         const assistantMsg: ChatMessage = {
@@ -51,7 +55,7 @@ export function useInstantReframe() {
     } finally {
       setIsLoading(false);
     }
-  }, [messages]);
+  }, [messages, stuckPoint]);
 
   const clearChat = useCallback(() => {
     setMessages([]);
@@ -67,21 +71,25 @@ export function useInstantReframe() {
   };
 }
 
-// Hook for Permission Slip generation
+// Hook for Permission Slip generation with style variants
 export function usePermissionSlip() {
   const [slip, setSlip] = useState<PermissionSlipData | null>(null);
+  const [slipStyle, setSlipStyle] = useState<PermissionSlipStyle>('classic');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateSlip = useCallback(async (fear: string) => {
+  const generateSlip = useCallback(async (fear: string, stuckPoint?: string) => {
     setIsLoading(true);
     setError(null);
     setSlip(null);
 
     try {
-      const response = await generatePermissionSlip(fear);
+      const response = await generatePermissionSlip(fear, stuckPoint);
       if (response.success && response.data) {
         setSlip(response.data);
+        // Set style based on stuck point
+        const style = getPermissionSlipStyle(stuckPoint);
+        setSlipStyle(style);
       } else {
         setError(response.error || 'Failed to generate permission slip');
       }
@@ -95,10 +103,12 @@ export function usePermissionSlip() {
   const clearSlip = useCallback(() => {
     setSlip(null);
     setError(null);
+    setSlipStyle('classic');
   }, []);
 
   return {
     slip,
+    slipStyle,
     isLoading,
     error,
     generateSlip,
@@ -106,19 +116,24 @@ export function usePermissionSlip() {
   };
 }
 
-// Hook for Micro-Action generation
+// Hook for context-aware Micro-Action generation
 export function useMicroActions() {
   const [actions, setActions] = useState<MicroActionData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateActions = useCallback(async (dream: string, stuckPoint?: string) => {
+  const generateActions = useCallback(async (
+    dream: string,
+    stuckPoint?: string,
+    completedActionsCount: number = 0
+  ) => {
     setIsLoading(true);
     setError(null);
     setActions([]);
 
     try {
-      const response = await generateMicroActions(dream, stuckPoint);
+      // Pass completed count for context-aware generation
+      const response = await generateMicroActions(dream, stuckPoint, completedActionsCount);
       if (response.success && response.actions) {
         setActions(response.actions);
       } else {

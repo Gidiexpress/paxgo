@@ -64,10 +64,24 @@ export default function ProfileScreen() {
       onPress: () => {},
     },
     {
-      icon: '📜',
-      title: 'Permission Slips',
-      subtitle: 'View your collection',
-      onPress: () => {},
+      icon: '📚',
+      title: 'The Archive',
+      subtitle: isPremium ? 'Browse your full history' : '🔒 Premium',
+      onPress: () => router.push('/archive'),
+      isPremium: !isPremium,
+    },
+    {
+      icon: '👯‍♀️',
+      title: 'Hype Squads',
+      subtitle: isPremium ? 'Your private cheer squad' : '🔒 Premium',
+      onPress: () => router.push('/hype-squads'),
+      isPremium: !isPremium,
+    },
+    {
+      icon: '🌍',
+      title: 'Hype Feed',
+      subtitle: 'Community wins & cheers',
+      onPress: () => router.push('/hype-feed'),
     },
     {
       icon: '🏅',
@@ -187,7 +201,7 @@ export default function ProfileScreen() {
           {menuItems.map((item, index) => (
             <TouchableOpacity
               key={item.title}
-              style={styles.menuItem}
+              style={[styles.menuItem, item.isPremium && styles.menuItemPremium]}
               onPress={item.onPress}
               activeOpacity={0.7}
             >
@@ -195,7 +209,7 @@ export default function ProfileScreen() {
               <View style={styles.menuTextContainer}>
                 <Text style={styles.menuTitle}>{item.title}</Text>
                 {item.subtitle && (
-                  <Text style={styles.menuSubtitle} numberOfLines={1}>
+                  <Text style={[styles.menuSubtitle, item.isPremium && styles.menuSubtitlePremium]} numberOfLines={1}>
                     {item.subtitle}
                   </Text>
                 )}
@@ -429,6 +443,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     ...shadows.sm,
   },
+  menuItemPremium: {
+    borderWidth: 1,
+    borderColor: colors.champagneGold + '50',
+    backgroundColor: colors.warmCream,
+  },
   menuIcon: {
     fontSize: 20,
     marginRight: spacing.md,
@@ -446,6 +465,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray500,
     marginTop: 2,
+  },
+  menuSubtitlePremium: {
+    color: colors.champagneGold,
   },
   menuArrow: {
     fontFamily: typography.fontFamily.body,

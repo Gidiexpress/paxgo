@@ -18,7 +18,9 @@ import { Card } from '@/components/ui/Card';
 import { DreamMap } from '@/components/DreamMap';
 import { ProofCard } from '@/components/ProofCard';
 import { useUser, useProofs, useDreamProgress, useActions } from '@/hooks/useStorage';
+import { useSubscription } from '@/hooks/useSubscription';
 import { ProofEntry } from '@/types';
+import { Badge } from '@/components/ui/Badge';
 
 const { width } = Dimensions.get('window');
 
@@ -40,6 +42,7 @@ export default function WinsScreen() {
   const { proofs } = useProofs();
   const { progress } = useDreamProgress();
   const { getCompletedActions } = useActions();
+  const { isPremium } = useSubscription();
 
   const completedCount = progress?.completedActions || 0;
   const dreamProgress = Math.min((completedCount / 50) * 100, 100) / 100; // Progress to 50 actions
@@ -207,6 +210,75 @@ export default function WinsScreen() {
               </TouchableOpacity>
             </Card>
           )}
+        </Animated.View>
+
+        {/* Community Section */}
+        <Animated.View entering={FadeInDown.delay(450)} style={styles.communitySection}>
+          <Text style={styles.sectionTitle}>Community</Text>
+          <View style={styles.communityCards}>
+            {/* Hype Feed - Available to all */}
+            <TouchableOpacity
+              style={styles.communityCard}
+              onPress={() => router.push('/hype-feed')}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[colors.vibrantTeal, colors.tealDark]}
+                style={styles.communityCardGradient}
+              >
+                <Text style={styles.communityCardIcon}>🌍</Text>
+                <Text style={styles.communityCardTitle}>Hype Feed</Text>
+                <Text style={styles.communityCardSubtitle}>Cheer community wins</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Hype Squads - Premium */}
+            <TouchableOpacity
+              style={styles.communityCard}
+              onPress={() => router.push('/hype-squads')}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={isPremium ? [colors.boldTerracotta, colors.terracottaDark] : [colors.gray400, colors.gray500]}
+                style={styles.communityCardGradient}
+              >
+                {!isPremium && (
+                  <View style={styles.premiumLock}>
+                    <Text style={styles.premiumLockText}>🔒</Text>
+                  </View>
+                )}
+                <Text style={styles.communityCardIcon}>👯‍♀️</Text>
+                <Text style={styles.communityCardTitle}>Hype Squads</Text>
+                <Text style={styles.communityCardSubtitle}>
+                  {isPremium ? 'Your private squad' : 'Premium feature'}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+
+          {/* Archive Link */}
+          <TouchableOpacity
+            style={[styles.archiveLink, !isPremium && styles.archiveLinkLocked]}
+            onPress={() => router.push('/archive')}
+            activeOpacity={0.9}
+          >
+            <View style={styles.archiveLinkContent}>
+              <Text style={styles.archiveLinkIcon}>📚</Text>
+              <View style={styles.archiveLinkText}>
+                <Text style={styles.archiveLinkTitle}>The Archive</Text>
+                <Text style={styles.archiveLinkSubtitle}>
+                  {isPremium
+                    ? 'Browse your complete journey history'
+                    : 'Unlock with Bold Adventurer'}
+                </Text>
+              </View>
+            </View>
+            {isPremium ? (
+              <Text style={styles.archiveLinkArrow}>›</Text>
+            ) : (
+              <Badge variant="gold" label="Premium" />
+            )}
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Recent Wins */}
@@ -472,5 +544,99 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.xs,
     color: colors.gray500,
+  },
+  // Community Section Styles
+  communitySection: {
+    marginBottom: spacing.xl,
+  },
+  communityCards: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  communityCard: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  communityCardGradient: {
+    padding: spacing.lg,
+    alignItems: 'center',
+    minHeight: 120,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  communityCardIcon: {
+    fontSize: 28,
+    marginBottom: spacing.xs,
+  },
+  communityCardTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+    textAlign: 'center',
+  },
+  communityCardSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255,255,255,0.8)',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  premiumLock: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumLockText: {
+    fontSize: 12,
+  },
+  archiveLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  archiveLinkLocked: {
+    borderWidth: 1,
+    borderColor: colors.champagneGold + '40',
+    backgroundColor: colors.warmCream,
+  },
+  archiveLinkContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  archiveLinkIcon: {
+    fontSize: 28,
+    marginRight: spacing.md,
+  },
+  archiveLinkText: {
+    flex: 1,
+  },
+  archiveLinkTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+  },
+  archiveLinkSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginTop: 2,
+  },
+  archiveLinkArrow: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: 24,
+    color: colors.gray400,
   },
 });

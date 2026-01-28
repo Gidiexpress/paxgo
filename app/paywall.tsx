@@ -12,7 +12,15 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
@@ -37,19 +45,32 @@ interface Plan {
   id: string;
   name: string;
   price: string;
+  originalPrice?: string;
   period: string;
   description: string;
   isPopular?: boolean;
+  isTrial?: boolean;
+  trialPrice?: string;
 }
 
 const plans: Plan[] = [
+  {
+    id: 'bold-adventurer-trial',
+    name: 'Bold Adventurer',
+    price: '$1',
+    originalPrice: '$9.99',
+    period: 'first month',
+    description: 'Try premium for just $1',
+    isPopular: true,
+    isTrial: true,
+    trialPrice: '$9.99/mo after',
+  },
   {
     id: 'bold-adventurer',
     name: 'Bold Adventurer',
     price: '$9.99',
     period: '/mo',
-    description: 'Most popular choice',
-    isPopular: true,
+    description: 'Full price, no trial',
   },
   {
     id: 'sprint',
@@ -65,9 +86,29 @@ export default function PaywallScreen() {
   const insets = useSafeAreaInsets();
   const { purchaseSubscription } = useSubscription();
 
-  const [selectedPlan, setSelectedPlan] = useState<string>('bold-adventurer');
+  const [selectedPlan, setSelectedPlan] = useState<string>('bold-adventurer-trial');
   const [isLoading, setIsLoading] = useState(false);
   // const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+
+  // Animation for the trial badge
+  const badgeScale = useSharedValue(1);
+  const badgeGlow = useSharedValue(0);
+
+  useEffect(() => {
+    // Pulse animation for trial badge
+    const interval = setInterval(() => {
+      badgeScale.value = withSequence(
+        withSpring(1.05, { damping: 10 }),
+        withSpring(1, { damping: 10 })
+      );
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const badgeAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: badgeScale.value }],
+  }));
 
   // RevenueCat integration - uncomment when configured
   // useEffect(() => {
@@ -99,16 +140,26 @@ export default function PaywallScreen() {
       //   }
       // }
 
-      // Mock purchase for now
-      await purchaseSubscription(selectedPlan as 'bold-adventurer' | 'sprint');
+      // Mock purchase for now - map trial to regular subscription
+      const subscriptionTier =
+        selectedPlan === 'bold-adventurer-trial' || selectedPlan === 'bold-adventurer'
+          ? 'bold-adventurer'
+          : 'sprint';
+
+      await purchaseSubscription(subscriptionTier as 'bold-adventurer' | 'sprint');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      const isTrial = selectedPlan === 'bold-adventurer-trial';
       Alert.alert(
-        '🎉 Welcome, Bold Adventurer!',
-        'You now have full access to all premium features.',
-        [{ text: 'Let\'s Go!', onPress: () => router.back() }]
+        isTrial ? '🎉 Welcome to Your $1 Trial!' : '🎉 Welcome, Bold Adventurer!',
+        isTrial
+          ? 'Enjoy full premium access for just $1 this month. Your journey starts now!'
+          : 'You now have full access to all premium features.',
+        [{ text: "Let's Go!", onPress: () => router.back() }]
       );
-    } catch (error: any) {
-      if (!error.userCancelled) {
+    } catch (error: unknown) {
+      const purchaseError = error as { userCancelled?: boolean };
+      if (!purchaseError.userCancelled) {
         Alert.alert('Error', 'Failed to complete purchase. Please try again.');
       }
     } finally {
@@ -132,6 +183,16 @@ export default function PaywallScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getButtonText = () => {
+    const plan = plans.find((p) => p.id === selectedPlan);
+    if (!plan) return 'Upgrade Now';
+
+    if (plan.isTrial) {
+      return `Start $1 Trial Month`;
+    }
+    return `Upgrade to ${plan.name} - ${plan.price}${plan.period.startsWith('/') ? plan.period : ''}`;
   };
 
   return (
@@ -192,7 +253,19 @@ export default function PaywallScreen() {
               }}
               activeOpacity={0.9}
             >
-              {plan.isPopular && (
+              {plan.isTrial && (
+                <Animated.View style={[styles.trialBadge, badgeAnimatedStyle]}>
+                  <LinearGradient
+                    colors={[colors.champagneGold, colors.goldDark]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.trialBadgeGradient}
+                  >
+                    <Text style={styles.trialBadgeText}>⭐ $1 FIRST MONTH</Text>
+                  </LinearGradient>
+                </Animated.View>
+              )}
+              {plan.isPopular && !plan.isTrial && (
                 <View style={styles.popularBadge}>
                   <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
                 </View>
@@ -211,8 +284,17 @@ export default function PaywallScreen() {
                   <Text style={styles.planDescription}>{plan.description}</Text>
                 </View>
                 <View style={styles.planPricing}>
-                  <Text style={styles.planPrice}>{plan.price}</Text>
-                  <Text style={styles.planPeriod}>{plan.period}</Text>
+                  <View style={styles.priceRow}>
+                    {plan.originalPrice && (
+                      <Text style={styles.originalPrice}>{plan.originalPrice}</Text>
+                    )}
+                    <Text style={[styles.planPrice, plan.isTrial && styles.trialPrice]}>
+                      {plan.price}
+                    </Text>
+                  </View>
+                  <Text style={styles.planPeriod}>
+                    {plan.isTrial ? plan.trialPrice : plan.period}
+                  </Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -236,15 +318,13 @@ export default function PaywallScreen() {
               {isLoading ? (
                 <ActivityIndicator color={colors.midnightNavy} />
               ) : (
-                <Text style={styles.ctaText}>
-                  Upgrade to Bold Adventurer - {selectedPlan === 'bold-adventurer' ? '$9.99/mo' : '$4.99'}
-                </Text>
+                <Text style={styles.ctaText}>{getButtonText()}</Text>
               )}
             </LinearGradient>
           </TouchableOpacity>
 
           {/* 7-Day Sprint option */}
-          {selectedPlan === 'bold-adventurer' && (
+          {selectedPlan !== 'sprint' && (
             <TouchableOpacity
               style={styles.sprintLink}
               onPress={() => setSelectedPlan('sprint')}
@@ -254,6 +334,22 @@ export default function PaywallScreen() {
               </Text>
             </TouchableOpacity>
           )}
+        </Animated.View>
+
+        {/* Trust signals */}
+        <Animated.View entering={FadeInDown.delay(350)} style={styles.trustSignals}>
+          <View style={styles.trustItem}>
+            <Text style={styles.trustIcon}>🔒</Text>
+            <Text style={styles.trustText}>Secure Payment</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Text style={styles.trustIcon}>↩️</Text>
+            <Text style={styles.trustText}>Cancel Anytime</Text>
+          </View>
+          <View style={styles.trustItem}>
+            <Text style={styles.trustIcon}>💳</Text>
+            <Text style={styles.trustText}>No Hidden Fees</Text>
+          </View>
         </Animated.View>
 
         {/* Restore & Terms */}
@@ -368,6 +464,26 @@ const styles = StyleSheet.create({
     borderColor: colors.champagneGold,
     backgroundColor: 'rgba(255,255,255,0.15)',
   },
+  trialBadge: {
+    position: 'absolute',
+    top: -12,
+    left: spacing.lg,
+    right: spacing.lg,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    ...shadows.md,
+  },
+  trialBadgeGradient: {
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  trialBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: 12,
+    color: colors.midnightNavy,
+    letterSpacing: 0.5,
+  },
   popularBadge: {
     position: 'absolute',
     top: -10,
@@ -422,10 +538,25 @@ const styles = StyleSheet.create({
   planPricing: {
     alignItems: 'flex-end',
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  originalPrice: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: 'rgba(255,255,255,0.5)',
+    textDecorationLine: 'line-through',
+  },
   planPrice: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize.xl,
     color: colors.white,
+  },
+  trialPrice: {
+    color: colors.champagneGold,
+    fontSize: typography.fontSize['2xl'],
   },
   planPeriod: {
     fontFamily: typography.fontFamily.body,
@@ -460,6 +591,24 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: 'rgba(255,255,255,0.8)',
     textDecorationLine: 'underline',
+  },
+  trustSignals: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xl,
+    marginBottom: spacing['2xl'],
+  },
+  trustItem: {
+    alignItems: 'center',
+  },
+  trustIcon: {
+    fontSize: 20,
+    marginBottom: 4,
+  },
+  trustText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255,255,255,0.6)',
   },
   footer: {
     alignItems: 'center',
