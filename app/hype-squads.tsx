@@ -238,7 +238,7 @@ export default function HypeSquadsScreen() {
 
     try {
       await Share.share({
-        message: `Join my Hype Squad "${squad.name}" on Paxgo! Use invite code: ${squad.inviteCode}`,
+        message: `Join my Hype Squad "${squad.name}" on The Bold Move! Use invite code: ${squad.inviteCode}`,
       });
     } catch (error) {
       console.error('Share error:', error);

@@ -15,7 +15,7 @@ import {
 } from '@/services/aiService';
 import { ChatMessage } from '@/types';
 
-const CHAT_HISTORY_KEY = '@paxgo_chat_history';
+const CHAT_HISTORY_KEY = '@boldmove_chat_history';
 
 // Hook for intelligent chat with Gabby - context-aware and versatile with persistence
 export function useInstantReframe(stuckPoint?: string) {

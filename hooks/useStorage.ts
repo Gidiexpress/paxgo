@@ -3,15 +3,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User, MicroAction, ProofEntry, PermissionSlip, DreamProgress, DeepDiveProgress } from '@/types';
 
 const STORAGE_KEYS = {
-  USER: '@paxgo_user',
-  ACTIONS: '@paxgo_actions',
-  PROOFS: '@paxgo_proofs',
-  PERMISSION_SLIPS: '@paxgo_permission_slips',
-  DREAM_PROGRESS: '@paxgo_dream_progress',
-  ONBOARDING_COMPLETE: '@paxgo_onboarding_complete',
-  CHAT_HISTORY: '@paxgo_chat_history',
-  DEEP_DIVE: '@paxgo_deep_dive',
-  CHAT_GENERATED_ACTIONS: '@paxgo_chat_generated_actions',
+  USER: '@boldmove_user',
+  ACTIONS: '@boldmove_actions',
+  PROOFS: '@boldmove_proofs',
+  PERMISSION_SLIPS: '@boldmove_permission_slips',
+  DREAM_PROGRESS: '@boldmove_dream_progress',
+  ONBOARDING_COMPLETE: '@boldmove_onboarding_complete',
+  CHAT_HISTORY: '@boldmove_chat_history',
+  DEEP_DIVE: '@boldmove_deep_dive',
+  CHAT_GENERATED_ACTIONS: '@boldmove_chat_generated_actions',
 };
 
 export function useStorage<T>(key: string, initialValue: T) {

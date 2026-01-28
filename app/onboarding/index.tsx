@@ -40,8 +40,8 @@ interface OnboardingStep {
 const steps: OnboardingStep[] = [
   {
     id: 'welcome',
-    title: 'Welcome to Paxgo',
-    subtitle: 'Your personal journey from dreaming to doing starts here.',
+    title: 'Welcome to The Bold Move',
+    subtitle: 'Your journey to boldness starts here. Make your move.',
   },
   {
     id: 'stuck-point',

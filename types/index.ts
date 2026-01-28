@@ -1,4 +1,4 @@
-// Type definitions for Paxgo
+// Type definitions for The Bold Move
 
 export interface User {
   id: string;

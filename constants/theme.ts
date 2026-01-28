@@ -1,4 +1,4 @@
-// Paxgo Theme - Warm & Worldly Aesthetic
+// The Bold Move Theme - Warm & Worldly Aesthetic
 export const colors = {
   // Primary Palette
   boldTerracotta: '#E2725B',

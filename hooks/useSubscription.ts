@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const SUBSCRIPTION_KEY = '@paxgo_subscription';
+const SUBSCRIPTION_KEY = '@boldmove_subscription';
 
 export type SubscriptionTier = 'seeker' | 'bold-adventurer' | 'sprint';
 

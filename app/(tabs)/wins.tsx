@@ -1,28 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  FlatList,
   TouchableOpacity,
-  Dimensions,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import { BlurView } from 'expo-blur';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { DreamMap } from '@/components/DreamMap';
-import { ProofCard } from '@/components/ProofCard';
-import { useUser, useProofs, useDreamProgress, useActions } from '@/hooks/useStorage';
+import { ProofWallMasonry } from '@/components/ProofWallMasonry';
+import { useProofs, useDreamProgress } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
 import { ProofEntry } from '@/types';
 import { Badge } from '@/components/ui/Badge';
-
-const { width } = Dimensions.get('window');
 
 // Milestone badges
 const milestones = [
@@ -38,26 +36,25 @@ export default function WinsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { user } = useUser();
   const { proofs } = useProofs();
   const { progress } = useDreamProgress();
-  const { getCompletedActions } = useActions();
   const { isPremium } = useSubscription();
+
+  const [selectedProof, setSelectedProof] = useState<ProofEntry | null>(null);
+  const [showProofWall, setShowProofWall] = useState(false);
 
   const completedCount = progress?.completedActions || 0;
   const dreamProgress = Math.min((completedCount / 50) * 100, 100) / 100; // Progress to 50 actions
 
-  const unlockedMilestones = milestones.filter((m) => completedCount >= m.required);
   const nextMilestone = milestones.find((m) => completedCount < m.required);
 
-  const renderProofItem = ({ item, index }: { item: ProofEntry; index: number }) => (
-    <Animated.View entering={FadeInDown.delay(index * 50)}>
-      <ProofCard
-        proof={item}
-        onPress={() => {}}
-      />
-    </Animated.View>
-  );
+  const handleProofPress = (proof: ProofEntry) => {
+    setSelectedProof(proof);
+  };
+
+  const handleAddProof = () => {
+    router.push('/add-proof');
+  };
 
   return (
     <View style={styles.container}>
@@ -176,39 +173,47 @@ export default function WinsScreen() {
           </Animated.View>
         )}
 
-        {/* Proof Gallery */}
+        {/* Proof Wall - Masonry Gallery */}
         <Animated.View entering={FadeInDown.delay(400)} style={styles.proofSection}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Proof Gallery</Text>
-            <TouchableOpacity onPress={() => router.push('/add-proof')}>
-              <Text style={styles.addProofLink}>+ Add Proof</Text>
-            </TouchableOpacity>
+            <Text style={styles.sectionTitle}>Proof Wall</Text>
+            <View style={styles.proofHeaderButtons}>
+              {proofs.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => setShowProofWall(true)}
+                  style={styles.viewAllButton}
+                >
+                  <Text style={styles.viewAllText}>View All</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={handleAddProof}>
+                <Text style={styles.addProofLink}>+ Add Proof</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {proofs.length > 0 ? (
-            <FlatList
-              data={proofs}
-              renderItem={renderProofItem}
-              keyExtractor={(item) => item.id}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.proofList}
-              ItemSeparatorComponent={() => <View style={{ width: spacing.md }} />}
-            />
-          ) : (
-            <Card style={styles.emptyProofCard}>
-              <Text style={styles.emptyProofIcon}>📸</Text>
-              <Text style={styles.emptyProofTitle}>No proofs yet</Text>
-              <Text style={styles.emptyProofText}>
-                Complete actions and capture your wins to build your proof gallery!
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyProofButton}
-                onPress={() => router.push('/add-proof')}
+          {/* Masonry Preview - Show first 4 proofs */}
+          <ProofWallMasonry
+            proofs={proofs.slice(0, 4)}
+            onProofPress={handleProofPress}
+            onAddProof={handleAddProof}
+          />
+
+          {/* Show "See more" if there are more than 4 proofs */}
+          {proofs.length > 4 && (
+            <TouchableOpacity
+              style={styles.seeMoreButton}
+              onPress={() => setShowProofWall(true)}
+            >
+              <LinearGradient
+                colors={[colors.warmCream, colors.parchmentWhite]}
+                style={styles.seeMoreGradient}
               >
-                <Text style={styles.emptyProofButtonText}>Add Your First Proof</Text>
-              </TouchableOpacity>
-            </Card>
+                <Text style={styles.seeMoreText}>
+                  See all {proofs.length} proofs →
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
           )}
         </Animated.View>
 
@@ -281,40 +286,120 @@ export default function WinsScreen() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Recent Wins */}
-        {proofs.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(500)} style={styles.recentWinsSection}>
-            <Text style={styles.sectionTitle}>Recent Wins</Text>
-            {proofs.slice(0, 3).map((proof, index) => (
-              <Card key={proof.id} style={styles.recentWinCard}>
-                <View style={styles.recentWinContent}>
-                  {proof.imageUri ? (
-                    <Image
-                      source={{ uri: proof.imageUri }}
-                      style={styles.recentWinImage}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={styles.recentWinImagePlaceholder}>
-                      <Text>📝</Text>
-                    </View>
-                  )}
-                  <View style={styles.recentWinText}>
-                    <Text style={styles.recentWinNote} numberOfLines={2}>
-                      {proof.note}
-                    </Text>
-                    <Text style={styles.recentWinDate}>
-                      {new Date(proof.createdAt).toLocaleDateString()}
-                    </Text>
-                  </View>
-                </View>
-              </Card>
-            ))}
-          </Animated.View>
-        )}
-
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Full Proof Wall Modal */}
+      <Modal
+        visible={showProofWall}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowProofWall(false)}
+      >
+        <View style={styles.modalContainer}>
+          <LinearGradient
+            colors={[colors.parchmentWhite, colors.warmCream]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.modalHeader, { paddingTop: insets.top + spacing.md }]}>
+            <TouchableOpacity
+              onPress={() => setShowProofWall(false)}
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Done</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Proof Wall</Text>
+            <TouchableOpacity onPress={handleAddProof}>
+              <Text style={styles.modalAddButton}>+ Add</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            showsVerticalScrollIndicator={false}
+          >
+            <ProofWallMasonry
+              proofs={proofs}
+              onProofPress={handleProofPress}
+              onAddProof={handleAddProof}
+            />
+            <View style={{ height: insets.bottom + spacing.xl }} />
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Proof Detail Modal */}
+      <Modal
+        visible={!!selectedProof}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedProof(null)}
+      >
+        <BlurView intensity={90} tint="dark" style={styles.proofDetailOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSelectedProof(null)}
+            activeOpacity={1}
+          />
+          {selectedProof && (
+            <Animated.View
+              entering={FadeInUp.springify().damping(15)}
+              style={[styles.proofDetailCard, { marginBottom: insets.bottom + spacing.xl }]}
+            >
+              {selectedProof.imageUri ? (
+                <Image
+                  source={{ uri: selectedProof.imageUri }}
+                  style={styles.proofDetailImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={styles.proofDetailNoteBg}>
+                  <LinearGradient
+                    colors={['#FDF8ED', '#F5EDD6', '#EDE4CC']}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </View>
+              )}
+              <View style={styles.proofDetailContent}>
+                <Text style={styles.proofDetailNote}>{selectedProof.note}</Text>
+                {selectedProof.hashtags.length > 0 && (
+                  <View style={styles.proofDetailHashtags}>
+                    {selectedProof.hashtags.map((tag, i) => (
+                      <View key={i} style={styles.proofDetailHashtagBadge}>
+                        <Text style={styles.proofDetailHashtagText}>#{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                <View style={styles.proofDetailFooter}>
+                  <View style={styles.proofDetailReactions}>
+                    {(selectedProof.reactions.length > 0
+                      ? selectedProof.reactions
+                      : ['💚', '🧡', '⭐']
+                    ).map((reaction, i) => (
+                      <View key={i} style={styles.proofDetailReactionBubble}>
+                        <Text style={styles.proofDetailReactionEmoji}>{reaction}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <Text style={styles.proofDetailDate}>
+                    {new Date(selectedProof.createdAt).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.proofDetailClose}
+                onPress={() => setSelectedProof(null)}
+              >
+                <Text style={styles.proofDetailCloseText}>✕</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </BlurView>
+      </Modal>
     </View>
   );
 }
@@ -358,6 +443,35 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   addProofLink: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.boldTerracotta,
+  },
+  proofHeaderButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.lg,
+  },
+  viewAllButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  viewAllText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray600,
+    textDecorationLine: 'underline',
+  },
+  seeMoreButton: {
+    marginTop: spacing.md,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  seeMoreGradient: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+  },
+  seeMoreText: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.sm,
     color: colors.boldTerracotta,
@@ -472,80 +586,133 @@ const styles = StyleSheet.create({
   proofSection: {
     marginBottom: spacing.xl,
   },
-  proofList: {
-    paddingRight: spacing.lg,
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: colors.parchmentWhite,
   },
-  emptyProofCard: {
-    alignItems: 'center',
-    paddingVertical: spacing['2xl'],
-  },
-  emptyProofIcon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
-  },
-  emptyProofTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-    marginBottom: spacing.xs,
-  },
-  emptyProofText: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.sm,
-    color: colors.gray600,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  emptyProofButton: {
-    backgroundColor: colors.boldTerracotta,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: borderRadius.lg,
-  },
-  emptyProofButtonText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.sm,
-    color: colors.white,
-  },
-  recentWinsSection: {
-    marginBottom: spacing.xl,
-  },
-  recentWinCard: {
-    marginBottom: spacing.md,
-  },
-  recentWinContent: {
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
   },
-  recentWinImage: {
-    width: 60,
-    height: 60,
-    borderRadius: borderRadius.md,
-    marginRight: spacing.md,
+  modalTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.midnightNavy,
   },
-  recentWinImagePlaceholder: {
-    width: 60,
-    height: 60,
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalCloseText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.boldTerracotta,
+  },
+  modalAddButton: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.boldTerracotta,
+  },
+  modalContent: {
+    paddingTop: spacing.xl,
+  },
+  // Proof Detail Modal
+  proofDetailOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  proofDetailCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    ...shadows.xl,
+  },
+  proofDetailImage: {
+    width: '100%',
+    height: 300,
+  },
+  proofDetailNoteBg: {
+    width: '100%',
+    height: 200,
+  },
+  proofDetailContent: {
+    padding: spacing.xl,
+  },
+  proofDetailNote: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+    lineHeight: 24,
+    marginBottom: spacing.lg,
+  },
+  proofDetailHashtags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  proofDetailHashtagBadge: {
+    backgroundColor: colors.boldTerracotta + '20',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
+  },
+  proofDetailHashtagText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.boldTerracotta,
+  },
+  proofDetailFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  proofDetailReactions: {
+    flexDirection: 'row',
+  },
+  proofDetailReactionBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.warmCream,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: -8,
+    borderWidth: 2,
+    borderColor: colors.white,
   },
-  recentWinText: {
-    flex: 1,
+  proofDetailReactionEmoji: {
+    fontSize: 14,
   },
-  recentWinNote: {
+  proofDetailDate: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
-    color: colors.midnightNavy,
-    marginBottom: spacing.xs,
-  },
-  recentWinDate: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
     color: colors.gray500,
+  },
+  proofDetailClose: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proofDetailCloseText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
   // Community Section Styles
   communitySection: {

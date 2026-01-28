@@ -17,19 +17,17 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  SlideInRight,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { PermissionSlip } from '@/components/PermissionSlip';
 import { VoiceRecorder } from '@/components/VoiceRecorder';
-import { ChatActionCard } from '@/components/ChatActionCard';
+import { ChatMessage } from '@/components/chat/ChatMessage';
 import { DeepDiveModal } from '@/components/DeepDiveModal';
-import { useUser, useActions, useChatActionsSync } from '@/hooks/useStorage';
-import { useInstantReframe, usePermissionSlip, useMicroActions, useChatActionSuggestion } from '@/hooks/useAI';
+import { useSocraticChat } from '@/hooks/useSocraticChat';
+import { useUser, useActions } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
+import { ActionToken } from '@/services/socraticCoachService';
 import { MicroAction } from '@/types';
 
 export default function HomeScreen() {
@@ -39,30 +37,33 @@ export default function HomeScreen() {
 
   const { user } = useUser();
   const { addAction } = useActions();
-  const { savePendingActions } = useChatActionsSync();
   const { isPremium, canUseAI, remainingAIUses, incrementAIUsage } = useSubscription();
-  const { messages, isLoading, sendMessage } = useInstantReframe();
-  const { slip, isLoading: slipLoading, generateSlip } = usePermissionSlip();
-  const { actions, isLoading: actionsLoading, generateActionsFromChat } = useMicroActions();
-  const { suggestion, isLoading: suggestionLoading, generateSuggestion, clearSuggestion } = useChatActionSuggestion();
+
+  const {
+    messages,
+    dialogueState,
+    isLoading,
+    error,
+    isRestored,
+    isFreshConversation,
+    isAtActionStep,
+    sendMessage,
+    selectOption,
+    clearChat,
+    getStepDescription,
+  } = useSocraticChat(user?.stuckPoint);
 
   const [inputText, setInputText] = useState('');
   const [showDeepDiveModal, setShowDeepDiveModal] = useState(false);
   const [deepDiveAction, setDeepDiveAction] = useState<MicroAction | null>(null);
   const [savedActionId, setSavedActionId] = useState<string | null>(null);
 
-  // Auto-generate action suggestion after a meaningful exchange (3+ messages with fears/goals)
+  // Scroll to bottom when new messages arrive
   useEffect(() => {
-    const userMessages = messages.filter(m => m.role === 'user');
-    // Only trigger after sufficient conversation and if no current suggestion
-    if (userMessages.length >= 2 && !suggestion && !suggestionLoading && !isLoading) {
-      const lastUserMessage = userMessages[userMessages.length - 1]?.content;
-      // Check if user shared something meaningful (not just a greeting)
-      const hasFearOrGoal = /\b(afraid|scared|want|need|trying|stuck|wish|dream|goal|hope)\b/i.test(lastUserMessage);
-      if (hasFearOrGoal) {
-        // Generate an inline action suggestion
-        generateSuggestion(lastUserMessage, user?.stuckPoint);
-      }
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
   }, [messages]);
 
@@ -75,70 +76,37 @@ export default function HomeScreen() {
       return;
     }
 
-    // Clear any existing suggestion when user sends new message
-    clearSuggestion();
-    setSavedActionId(null);
-
     setInputText('');
+    setSavedActionId(null);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await sendMessage(textToSend);
     await incrementAIUsage();
-
-    // Scroll to bottom
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 100);
   };
 
   const handleVoiceTranscription = async (transcribedText: string) => {
-    // Send the transcribed text directly to Gabby
     await handleSendMessage(transcribedText);
   };
 
-  const handleGenerateMicroAction = async () => {
-    if (messages.length === 0) return;
-
-    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-    if (lastUserMessage) {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      await generateSlip(lastUserMessage.content);
-      // Use contextual generation based on full conversation
-      await generateActionsFromChat(
-        messages.map(m => ({ role: m.role, content: m.content })),
-        user?.stuckPoint
-      );
+  const handleSelectOption = async (option: string) => {
+    if (!canUseAI) {
+      router.push('/paywall');
+      return;
     }
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await selectOption(option);
+    await incrementAIUsage();
   };
 
-  // Save generated actions for sync when they're created
-  useEffect(() => {
-    if (actions.length > 0) {
-      const actionsForSync = actions.map(action => ({
-        title: action.title,
-        description: action.description,
-        duration: action.duration,
-        category: action.category,
-        isPremium: action.category === 'connection' || action.category === 'action',
-        isCompleted: false,
-        dreamId: user?.dream || 'chat',
-      }));
-      savePendingActions(actionsForSync);
-    }
-  }, [actions, user?.dream, savePendingActions]);
-
-  // Handle starting an action from chat (opens Deep Dive modal)
-  const handleStartChatAction = useCallback(async () => {
-    if (!suggestion) return;
-
+  // Handle starting an action from chat
+  const handleStartAction = useCallback(async (action: ActionToken['action']) => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Create a MicroAction object for the Deep Dive modal
     const actionForDeepDive: MicroAction = {
-      id: suggestion.id,
-      title: suggestion.title,
-      description: suggestion.description,
-      duration: suggestion.duration,
-      category: suggestion.category,
+      id: action.id,
+      title: action.title,
+      description: action.description,
+      duration: action.duration,
+      category: action.category,
       isPremium: false,
       isCompleted: false,
       dreamId: user?.dream || 'chat',
@@ -146,39 +114,43 @@ export default function HomeScreen() {
 
     setDeepDiveAction(actionForDeepDive);
     setShowDeepDiveModal(true);
-  }, [suggestion, user?.dream]);
+  }, [user?.dream]);
 
-  // Handle saving chat action to Action tab
-  const handleSaveChatAction = useCallback(async () => {
-    if (!suggestion) return;
-
+  // Handle saving action for later
+  const handleSaveAction = useCallback(async (action: ActionToken['action']) => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Save the action to storage
     const savedAction = await addAction({
-      title: suggestion.title,
-      description: suggestion.description,
-      duration: suggestion.duration,
+      title: action.title,
+      description: action.description,
+      duration: action.duration,
       isPremium: false,
       isCompleted: false,
-      category: suggestion.category as MicroAction['category'],
+      category: action.category as MicroAction['category'],
       dreamId: user?.dream || 'chat',
     });
 
     setSavedActionId(savedAction.id);
-  }, [suggestion, addAction, user?.dream]);
+  }, [addAction, user?.dream]);
 
   // Handle Deep Dive completion
   const handleDeepDiveComplete = async () => {
     if (deepDiveAction) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // If this was a suggestion, mark it as done
-      if (deepDiveAction.id === suggestion?.id) {
-        clearSuggestion();
-      }
       setShowDeepDiveModal(false);
       setDeepDiveAction(null);
+      // Navigate to add proof after completing action
+      router.push({
+        pathname: '/add-proof',
+        params: { actionId: deepDiveAction.id, actionTitle: deepDiveAction.title },
+      });
     }
+  };
+
+  // Handle new chat
+  const handleNewChat = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    await clearChat();
   };
 
   return (
@@ -195,19 +167,45 @@ export default function HomeScreen() {
       >
         {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>‹</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Paxgo – Mindset Coach</Text>
-          <View style={styles.avatarContainer}>
-            <LinearGradient
-              colors={[colors.boldTerracotta, colors.terracottaDark]}
-              style={styles.avatar}
-            >
-              <Text style={styles.avatarText}>G</Text>
-            </LinearGradient>
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerTitle}>The Bold Move</Text>
+            <Text style={styles.headerSubtitle}>Mindset Coach</Text>
+          </View>
+          <View style={styles.headerRight}>
+            {!isFreshConversation && (
+              <TouchableOpacity onPress={handleNewChat} style={styles.newChatButton}>
+                <Text style={styles.newChatText}>New Chat</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={[colors.boldTerracotta, colors.terracottaDark]}
+                style={styles.avatar}
+              >
+                <Text style={styles.avatarText}>G</Text>
+              </LinearGradient>
+            </View>
           </View>
         </View>
+
+        {/* Dialogue Step Indicator */}
+        {!isFreshConversation && (
+          <Animated.View entering={FadeIn} style={styles.stepIndicator}>
+            <View style={styles.stepDots}>
+              {[1, 2, 3, 4].map((step) => (
+                <View
+                  key={step}
+                  style={[
+                    styles.stepDot,
+                    step === dialogueState.step && styles.stepDotActive,
+                    step < dialogueState.step && styles.stepDotCompleted,
+                  ]}
+                />
+              ))}
+            </View>
+            <Text style={styles.stepLabel}>{getStepDescription()}</Text>
+          </Animated.View>
+        )}
 
         {/* Chat Messages */}
         <ScrollView
@@ -217,17 +215,27 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Welcome message */}
-          {messages.length === 0 && (
+          {isFreshConversation && isRestored && (
             <Animated.View entering={FadeIn} style={styles.welcomeContainer}>
               <Card style={styles.welcomeCard}>
                 <View style={styles.gabbyHeader}>
-                  <View style={styles.gabbyAvatar}>
+                  <LinearGradient
+                    colors={[colors.boldTerracotta, colors.terracottaDark]}
+                    style={styles.gabbyAvatar}
+                  >
                     <Text style={styles.gabbyAvatarText}>G</Text>
-                  </View>
+                  </LinearGradient>
                   <Text style={styles.gabbyName}>Gabby</Text>
                 </View>
                 <Text style={styles.welcomeText}>
-                  Hey {user?.name || 'there'}! 👋 I&apos;m Gabby, your mindset coach. Share what&apos;s on your mind – a fear, a doubt, or something holding you back. Let&apos;s turn it into your next bold move! ✨
+                  Hey {user?.name || 'there'}! 👋 I&apos;m Gabby, your mindset coach.
+                  {'\n\n'}
+                  Share what&apos;s weighing on you—a fear, a doubt, or something holding you back.
+                  I&apos;ll help you uncover what&apos;s really going on and transform it into your next bold move.
+                  {'\n\n'}
+                  <Text style={styles.welcomeHint}>
+                    Take your time. I&apos;m here to listen deeply. ✨
+                  </Text>
                 </Text>
               </Card>
             </Animated.View>
@@ -235,38 +243,20 @@ export default function HomeScreen() {
 
           {/* Messages */}
           {messages.map((message, index) => (
-            <Animated.View
+            <ChatMessage
               key={message.id}
-              entering={FadeInDown.delay(index * 50)}
-              style={[
-                styles.messageContainer,
-                message.role === 'user' ? styles.userMessage : styles.assistantMessage,
-              ]}
-            >
-              {message.role === 'assistant' && (
-                <View style={styles.gabbyHeader}>
-                  <View style={styles.gabbyAvatarSmall}>
-                    <Text style={styles.gabbyAvatarTextSmall}>G</Text>
-                  </View>
-                  <Text style={styles.gabbyNameSmall}>Gabby</Text>
-                </View>
-              )}
-              <Card
-                style={{
-                  ...styles.messageBubble,
-                  ...(message.role === 'user' ? styles.userBubble : styles.assistantBubble),
-                }}
-              >
-                <Text
-                  style={[
-                    styles.messageText,
-                    message.role === 'user' && styles.userMessageText,
-                  ]}
-                >
-                  {message.content}
-                </Text>
-              </Card>
-            </Animated.View>
+              id={message.id}
+              role={message.role}
+              content={message.content}
+              tokens={message.tokens}
+              dialogueStep={message.dialogueStep}
+              index={index}
+              onSelectOption={handleSelectOption}
+              onStartAction={handleStartAction}
+              onSaveAction={handleSaveAction}
+              isLatest={index === messages.length - 1}
+              disabled={isLoading}
+            />
           ))}
 
           {/* Loading indicator */}
@@ -274,27 +264,29 @@ export default function HomeScreen() {
             <Animated.View entering={FadeIn} style={styles.loadingContainer}>
               <View style={styles.typingIndicator}>
                 <Text style={styles.typingDot}>●</Text>
-                <Text style={styles.typingDot}>●</Text>
-                <Text style={styles.typingDot}>●</Text>
+                <Text style={[styles.typingDot, styles.typingDot2]}>●</Text>
+                <Text style={[styles.typingDot, styles.typingDot3]}>●</Text>
               </View>
+              <Text style={styles.loadingText}>Gabby is {getStepDescription().toLowerCase()}...</Text>
             </Animated.View>
           )}
 
-          {/* Inline Chat Action Suggestion */}
-          {suggestion && !savedActionId && !isLoading && (
-            <ChatActionCard
-              action={suggestion}
-              onStartNow={handleStartChatAction}
-              onSaveForLater={handleSaveChatAction}
-            />
+          {/* Error message */}
+          {error && (
+            <Animated.View entering={FadeIn} style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity onPress={() => handleSendMessage(inputText)}>
+                <Text style={styles.retryText}>Try again</Text>
+              </TouchableOpacity>
+            </Animated.View>
           )}
 
           {/* Saved action confirmation */}
           {savedActionId && (
-            <Animated.View entering={FadeIn} style={styles.savedConfirmation}>
+            <Animated.View entering={FadeInUp} style={styles.savedConfirmation}>
               <View style={styles.savedContent}>
                 <Text style={styles.savedIcon}>✓</Text>
-                <Text style={styles.savedText}>Added to your Actions</Text>
+                <Text style={styles.savedText}>Saved to your Actions</Text>
               </View>
               <TouchableOpacity
                 onPress={() => router.push('/(tabs)/action')}
@@ -304,67 +296,13 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </Animated.View>
           )}
-
-          {/* Generate Micro-Action Button */}
-          {messages.length > 0 && !isLoading && !suggestion && !savedActionId && (
-            <Animated.View entering={FadeIn} style={styles.actionPromptContainer}>
-              <Button
-                title="Generate Micro-Actions ↗"
-                onPress={handleGenerateMicroAction}
-                variant="primary"
-                size="md"
-                loading={actionsLoading || slipLoading}
-                style={styles.microActionButton}
-              />
-            </Animated.View>
-          )}
-
-          {/* Permission Slip */}
-          {slip && (
-            <Animated.View entering={FadeInUp.springify().damping(15).delay(200)}>
-              <PermissionSlip
-                slip={{
-                  id: Date.now().toString(),
-                  title: slip.title,
-                  permission: slip.permission,
-                  signedBy: slip.signedBy,
-                  createdAt: new Date().toISOString(),
-                  fear: messages.find(m => m.role === 'user')?.content || '',
-                }}
-              />
-            </Animated.View>
-          )}
-
-          {/* Generated Actions Preview - Smooth transition from Permission Slip */}
-          {actions.length > 0 && (
-            <Animated.View entering={SlideInRight.springify().damping(18).delay(slip ? 600 : 200)} style={styles.actionsPreview}>
-              <Text style={styles.actionsPreviewTitle}>Your Micro-Actions</Text>
-              {actions.slice(0, 2).map((action, index) => (
-                <Animated.View key={index} entering={FadeInDown.delay(index * 150 + 300)}>
-                  <Card style={styles.actionPreviewCard}>
-                    <Text style={styles.actionPreviewCardTitle}>{action.title}</Text>
-                    <Text style={styles.actionPreviewDuration}>⏱️ {action.duration} min</Text>
-                  </Card>
-                </Animated.View>
-              ))}
-              <Animated.View entering={FadeIn.delay(800)}>
-                <Button
-                  title="View All Actions →"
-                  onPress={() => router.push('/(tabs)/action')}
-                  variant="primary"
-                  size="md"
-                  style={styles.viewActionsButton}
-                />
-              </Animated.View>
-            </Animated.View>
-          )}
         </ScrollView>
 
         {/* Input Area */}
         <View style={[styles.inputContainer, { paddingBottom: insets.bottom + spacing.sm }]}>
           {!isPremium && (
             <Text style={styles.usageHint}>
-              {remainingAIUses} AI reframes left today
+              {remainingAIUses === Infinity ? '∞' : remainingAIUses} AI conversations left today
             </Text>
           )}
           <View style={styles.inputRow}>
@@ -376,7 +314,7 @@ export default function HomeScreen() {
 
             <TextInput
               style={styles.textInput}
-              placeholder="Type or hold mic to speak..."
+              placeholder={isFreshConversation ? "What's on your mind?" : "Continue sharing..."}
               placeholderTextColor={colors.gray400}
               value={inputText}
               onChangeText={setInputText}
@@ -398,7 +336,7 @@ export default function HomeScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Deep Dive Modal for chat actions */}
+      {/* Deep Dive Modal */}
       <DeepDiveModal
         visible={showDeepDiveModal}
         action={deepDiveAction}
@@ -425,42 +363,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.gray200,
     backgroundColor: colors.parchmentWhite,
   },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    fontSize: 28,
-    color: colors.midnightNavy,
-    fontWeight: '300',
+  headerLeft: {
+    flex: 1,
   },
   headerTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
     color: colors.midnightNavy,
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginTop: 2,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  newChatButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.gray100,
+  },
+  newChatText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray600,
   },
   avatarContainer: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: 16,
+    fontSize: 18,
     color: colors.white,
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.warmCream,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.gray200,
+    gap: spacing.md,
+  },
+  stepDots: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.gray300,
+  },
+  stepDotActive: {
+    backgroundColor: colors.boldTerracotta,
+    width: 20,
+  },
+  stepDotCompleted: {
+    backgroundColor: colors.vibrantTeal,
+  },
+  stepLabel: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray600,
   },
   chatContainer: {
     flex: 1,
@@ -479,25 +464,24 @@ const styles = StyleSheet.create({
   gabbyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
   },
   gabbyAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.warmCream,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
   gabbyAvatarText: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: 18,
-    color: colors.midnightNavy,
+    fontSize: 20,
+    color: colors.white,
   },
   gabbyName: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
   },
   welcomeText: {
@@ -506,54 +490,9 @@ const styles = StyleSheet.create({
     color: colors.gray700,
     lineHeight: 24,
   },
-  messageContainer: {
-    marginBottom: spacing.lg,
-  },
-  userMessage: {
-    alignItems: 'flex-end',
-  },
-  assistantMessage: {
-    alignItems: 'flex-start',
-  },
-  gabbyAvatarSmall: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.warmCream,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
-  },
-  gabbyAvatarTextSmall: {
-    fontFamily: typography.fontFamily.heading,
-    fontSize: 14,
-    color: colors.midnightNavy,
-  },
-  gabbyNameSmall: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.sm,
-    color: colors.midnightNavy,
-  },
-  messageBubble: {
-    maxWidth: '85%',
-    borderRadius: borderRadius.xl,
-  },
-  userBubble: {
-    backgroundColor: colors.midnightNavy,
-    borderBottomRightRadius: borderRadius.sm,
-  },
-  assistantBubble: {
-    backgroundColor: colors.white,
-    borderBottomLeftRadius: borderRadius.sm,
-  },
-  messageText: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.base,
-    color: colors.gray700,
-    lineHeight: 24,
-  },
-  userMessageText: {
-    color: colors.white,
+  welcomeHint: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    color: colors.boldTerracotta,
   },
   loadingContainer: {
     alignItems: 'flex-start',
@@ -569,53 +508,50 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   typingDot: {
-    color: colors.gray400,
+    color: colors.boldTerracotta,
     fontSize: 12,
   },
-  actionPromptContainer: {
-    marginTop: spacing.md,
-    alignItems: 'flex-start',
+  typingDot2: {
+    opacity: 0.7,
   },
-  microActionButton: {
-    backgroundColor: colors.boldTerracotta,
+  typingDot3: {
+    opacity: 0.4,
   },
-  actionsPreview: {
-    marginTop: spacing.xl,
-  },
-  actionsPreviewTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-    marginBottom: spacing.md,
-  },
-  actionPreviewCard: {
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  actionPreviewCardTitle: {
-    fontFamily: typography.fontFamily.bodyMedium,
-    fontSize: typography.fontSize.base,
-    color: colors.midnightNavy,
-    flex: 1,
-  },
-  actionPreviewDuration: {
+  loadingText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.gray500,
+    marginTop: spacing.xs,
+    marginLeft: spacing.sm,
   },
-  viewActionsButton: {
-    marginTop: spacing.sm,
+  errorContainer: {
+    backgroundColor: colors.terracottaLight + '20',
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    marginVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.terracottaDark,
+    marginBottom: spacing.xs,
+  },
+  retryText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.boldTerracotta,
   },
   savedConfirmation: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.tealLight,
+    backgroundColor: colors.tealLight + '20',
     padding: spacing.md,
     borderRadius: borderRadius.lg,
     marginVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.vibrantTeal + '40',
   },
   savedContent: {
     flexDirection: 'row',
@@ -644,7 +580,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.gray200,
     backgroundColor: colors.parchmentWhite,

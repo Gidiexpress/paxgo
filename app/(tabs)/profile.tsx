@@ -288,9 +288,9 @@ export default function ProfileScreen() {
 
         {/* App Info */}
         <Animated.View entering={FadeInDown.delay(600)} style={styles.appInfo}>
-          <Text style={styles.appName}>Paxgo</Text>
+          <Text style={styles.appName}>The Bold Move</Text>
           <Text style={styles.appVersion}>Version 1.0.0</Text>
-          <Text style={styles.appTagline}>From Dreaming to Doing ✨</Text>
+          <Text style={styles.appTagline}>Make Your Move ✨</Text>
         </Animated.View>
 
         <View style={{ height: 100 }} />
