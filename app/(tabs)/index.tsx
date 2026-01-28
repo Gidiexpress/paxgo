@@ -15,7 +15,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
-  FadeInDown,
   FadeInUp,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -27,8 +26,10 @@ import { DeepDiveModal } from '@/components/DeepDiveModal';
 import { useSocraticChat } from '@/hooks/useSocraticChat';
 import { useUser, useActions } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useDreams } from '@/hooks/useDreams';
 import { ActionToken } from '@/services/socraticCoachService';
 import { MicroAction } from '@/types';
+import { DREAM_CATEGORIES } from '@/types/dreams';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -38,6 +39,10 @@ export default function HomeScreen() {
   const { user } = useUser();
   const { addAction } = useActions();
   const { isPremium, canUseAI, remainingAIUses, incrementAIUsage } = useSubscription();
+  const { activeDream } = useDreams();
+
+  // Get category info for active dream
+  const activeDreamCategory = activeDream ? DREAM_CATEGORIES[activeDream.category] : null;
 
   const {
     messages,
@@ -46,7 +51,6 @@ export default function HomeScreen() {
     error,
     isRestored,
     isFreshConversation,
-    isAtActionStep,
     sendMessage,
     selectOption,
     clearChat,
@@ -169,7 +173,29 @@ export default function HomeScreen() {
         <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>The Bold Move</Text>
-            <Text style={styles.headerSubtitle}>Mindset Coach</Text>
+            {activeDream ? (
+              <TouchableOpacity
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.activeDreamChip}
+              >
+                <View
+                  style={[
+                    styles.dreamChipIcon,
+                    { backgroundColor: activeDreamCategory?.gradient[0] + '30' },
+                  ]}
+                >
+                  <Text style={styles.dreamChipIconText}>
+                    {activeDreamCategory?.icon || '🎯'}
+                  </Text>
+                </View>
+                <Text style={styles.dreamChipTitle} numberOfLines={1}>
+                  {activeDream.title}
+                </Text>
+                <Text style={styles.dreamChipArrow}>›</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.headerSubtitle}>Mindset Coach</Text>
+            )}
           </View>
           <View style={styles.headerRight}>
             {!isFreshConversation && (
@@ -382,6 +408,41 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray500,
     marginTop: 2,
+  },
+  activeDreamChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    paddingVertical: spacing.xs,
+    paddingRight: spacing.sm,
+    paddingLeft: 4,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
+    ...shadows.sm,
+    maxWidth: 200,
+  },
+  dreamChipIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs,
+  },
+  dreamChipIconText: {
+    fontSize: 12,
+  },
+  dreamChipTitle: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.midnightNavy,
+    flex: 1,
+  },
+  dreamChipArrow: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: 16,
+    color: colors.gray400,
+    marginLeft: 4,
   },
   headerRight: {
     flexDirection: 'row',

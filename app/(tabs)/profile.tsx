@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -16,8 +16,11 @@ import { colors, typography, borderRadius, spacing, shadows } from '@/constants/
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { DreamSwitcher } from '@/components/DreamSwitcher';
 import { useUser, useOnboarding, useDreamProgress } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useDreams } from '@/hooks/useDreams';
+import { useBoostStore } from '@/hooks/useBoostStore';
 import { stuckPoints } from '@/constants/stuckPoints';
 
 export default function ProfileScreen() {
@@ -28,6 +31,8 @@ export default function ProfileScreen() {
   const { resetOnboarding } = useOnboarding();
   const { progress } = useDreamProgress();
   const { subscription, isPremium } = useSubscription();
+  const { dreams, activeDreamId, switchDream } = useDreams();
+  const { unreadCount } = useBoostStore();
 
   const stuckPoint = stuckPoints.find((s) => s.id === user?.stuckPoint);
 
@@ -50,21 +55,35 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleNewDream = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    router.push('/new-dream');
+  }, [router]);
+
+  const handleSwitchDream = useCallback(
+    async (dreamId: string) => {
+      await switchDream(dreamId);
+    },
+    [switchDream]
+  );
+
   const menuItems = [
     {
-      icon: '🎯',
-      title: 'My Dream',
-      subtitle: user?.dream || 'Not set',
-      onPress: () => {},
-    },
-    {
-      icon: '💫',
-      title: 'Stuck Point',
-      subtitle: stuckPoint?.title || 'Not set',
-      onPress: () => {},
+      icon: '✨',
+      title: 'Boldness Boosts',
+      subtitle: 'Premium guides & roadmaps',
+      onPress: () => router.push('/boost-store'),
+      badge: unreadCount > 0 ? `${unreadCount} new` : undefined,
+      isGold: true,
     },
     {
       icon: '📚',
+      title: 'My Library',
+      subtitle: 'Your purchased content',
+      onPress: () => router.push('/library'),
+    },
+    {
+      icon: '🗂️',
       title: 'The Archive',
       subtitle: isPremium ? 'Browse your full history' : '🔒 Premium',
       onPress: () => router.push('/archive'),
@@ -155,25 +174,46 @@ export default function ProfileScreen() {
           {/* Stats */}
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{dreams.length}</Text>
+              <Text style={styles.statLabel}>Dreams</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
               <Text style={styles.statNumber}>{progress?.completedActions || 0}</Text>
               <Text style={styles.statLabel}>Actions</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{progress?.currentStreak || 0}</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{progress?.longestStreak || 0}</Text>
-              <Text style={styles.statLabel}>Best Streak</Text>
+              <Text style={styles.statLabel}>Streak</Text>
             </View>
           </View>
         </Animated.View>
 
+        {/* Multi-Dream Management */}
+        <Animated.View entering={FadeInDown.delay(100)} style={styles.dreamsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Dreams</Text>
+            <TouchableOpacity onPress={handleNewDream} style={styles.addDreamButton}>
+              <LinearGradient
+                colors={[colors.champagneGold, colors.goldDark]}
+                style={styles.addDreamGradient}
+              >
+                <Text style={styles.addDreamText}>+ New</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+          <DreamSwitcher
+            dreams={dreams}
+            activeDreamId={activeDreamId}
+            onSwitchDream={handleSwitchDream}
+            onNewDream={handleNewDream}
+          />
+        </Animated.View>
+
         {/* Upgrade Banner (for free users) */}
         {!isPremium && (
-          <Animated.View entering={FadeInDown.delay(100)}>
+          <Animated.View entering={FadeInDown.delay(150)}>
             <TouchableOpacity
               onPress={() => router.push('/paywall')}
               activeOpacity={0.9}
@@ -183,7 +223,7 @@ export default function ProfileScreen() {
                   <View style={styles.upgradeTextContainer}>
                     <Text style={styles.upgradeTitle}>Unlock Your Full Potential</Text>
                     <Text style={styles.upgradeSubtitle}>
-                      Get unlimited AI coaching and premium features
+                      Get unlimited AI coaching, 25% off boosts & more
                     </Text>
                   </View>
                   <View style={styles.upgradeArrow}>
@@ -198,10 +238,14 @@ export default function ProfileScreen() {
         {/* Menu Items */}
         <Animated.View entering={FadeInDown.delay(200)} style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Your Journey</Text>
-          {menuItems.map((item, index) => (
+          {menuItems.map((item) => (
             <TouchableOpacity
               key={item.title}
-              style={[styles.menuItem, item.isPremium && styles.menuItemPremium]}
+              style={[
+                styles.menuItem,
+                item.isPremium && styles.menuItemPremium,
+                item.isGold && styles.menuItemGold,
+              ]}
               onPress={item.onPress}
               activeOpacity={0.7}
             >
@@ -209,11 +253,23 @@ export default function ProfileScreen() {
               <View style={styles.menuTextContainer}>
                 <Text style={styles.menuTitle}>{item.title}</Text>
                 {item.subtitle && (
-                  <Text style={[styles.menuSubtitle, item.isPremium && styles.menuSubtitlePremium]} numberOfLines={1}>
+                  <Text
+                    style={[
+                      styles.menuSubtitle,
+                      item.isPremium && styles.menuSubtitlePremium,
+                      item.isGold && styles.menuSubtitleGold,
+                    ]}
+                    numberOfLines={1}
+                  >
                     {item.subtitle}
                   </Text>
                 )}
               </View>
+              {item.badge && (
+                <View style={styles.menuBadge}>
+                  <Text style={styles.menuBadgeText}>{item.badge}</Text>
+                </View>
+              )}
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
           ))}
@@ -222,7 +278,7 @@ export default function ProfileScreen() {
         {/* Settings */}
         <Animated.View entering={FadeInDown.delay(300)} style={styles.menuSection}>
           <Text style={styles.sectionTitle}>Settings</Text>
-          {settingsItems.map((item, index) => (
+          {settingsItems.map((item) => (
             <TouchableOpacity
               key={item.title}
               style={styles.menuItem}
@@ -314,12 +370,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
     ...shadows.lg,
   },
   headerGradient: {
     alignItems: 'center',
-    paddingVertical: spacing['3xl'],
+    paddingVertical: spacing['2xl'],
     paddingHorizontal: spacing.xl,
   },
   avatarContainer: {
@@ -390,6 +446,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray200,
     marginVertical: spacing.xs,
   },
+  dreamsSection: {
+    marginBottom: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  addDreamButton: {
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  addDreamGradient: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  addDreamText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.white,
+  },
   upgradeCard: {
     marginBottom: spacing.lg,
     backgroundColor: colors.warmCream,
@@ -449,6 +527,11 @@ const styles = StyleSheet.create({
     borderColor: colors.champagneGold + '50',
     backgroundColor: colors.warmCream,
   },
+  menuItemGold: {
+    borderWidth: 1,
+    borderColor: colors.champagneGold,
+    backgroundColor: colors.champagneGold + '10',
+  },
   menuIcon: {
     fontSize: 20,
     marginRight: spacing.md,
@@ -469,6 +552,21 @@ const styles = StyleSheet.create({
   },
   menuSubtitlePremium: {
     color: colors.champagneGold,
+  },
+  menuSubtitleGold: {
+    color: colors.goldDark,
+  },
+  menuBadge: {
+    backgroundColor: colors.boldTerracotta,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    marginRight: spacing.sm,
+  },
+  menuBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: 10,
+    color: colors.white,
   },
   menuArrow: {
     fontFamily: typography.fontFamily.body,
