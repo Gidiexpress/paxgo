@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,12 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DreamSwitcher } from '@/components/DreamSwitcher';
+import { NotificationPrePrompt } from '@/components/NotificationPrePrompt';
 import { useUser, useOnboarding, useDreamProgress } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useDreams } from '@/hooks/useDreams';
 import { useBoostStore } from '@/hooks/useBoostStore';
+import { useNotifications } from '@/hooks/useNotifications';
 import { stuckPoints } from '@/constants/stuckPoints';
 
 export default function ProfileScreen() {
@@ -33,6 +35,16 @@ export default function ProfileScreen() {
   const { subscription, isPremium } = useSubscription();
   const { dreams, activeDreamId, switchDream } = useDreams();
   const { unreadCount } = useBoostStore();
+
+  // Notification hook
+  const {
+    preferences: notificationPrefs,
+    shouldShowPrePrompt,
+    requestPermission,
+    markPrePromptShown,
+  } = useNotifications(progress?.currentStreak || 0);
+
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
   const stuckPoint = stuckPoints.find((s) => s.id === user?.stuckPoint);
 
@@ -66,6 +78,32 @@ export default function ProfileScreen() {
     },
     [switchDream]
   );
+
+  const handleNotificationPress = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // If we should show the pre-prompt and haven't shown it yet, show it
+    if (shouldShowPrePrompt) {
+      setShowNotificationPrompt(true);
+    } else {
+      // Otherwise go directly to settings
+      router.push('/notification-settings');
+    }
+  }, [shouldShowPrePrompt, router]);
+
+  const handleNotificationEnable = useCallback(async () => {
+    await markPrePromptShown();
+    await requestPermission();
+    setShowNotificationPrompt(false);
+    // Navigate to settings regardless of permission result
+    router.push('/notification-settings');
+  }, [markPrePromptShown, requestPermission, router]);
+
+  const handleNotificationDismiss = useCallback(async () => {
+    await markPrePromptShown();
+    setShowNotificationPrompt(false);
+    // Still navigate to settings so they can configure later
+    router.push('/notification-settings');
+  }, [markPrePromptShown, router]);
 
   const menuItems = [
     {
@@ -114,7 +152,10 @@ export default function ProfileScreen() {
     {
       icon: '🔔',
       title: 'Notifications',
-      onPress: () => {},
+      subtitle: notificationPrefs.permissionStatus === 'granted'
+        ? (notificationPrefs.enabled ? 'Enabled' : 'Disabled')
+        : 'Tap to enable',
+      onPress: handleNotificationPress,
     },
     {
       icon: '🎨',
@@ -288,6 +329,9 @@ export default function ProfileScreen() {
               <Text style={styles.menuIcon}>{item.icon}</Text>
               <View style={styles.menuTextContainer}>
                 <Text style={styles.menuTitle}>{item.title}</Text>
+                {item.subtitle && (
+                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                )}
               </View>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
@@ -351,6 +395,13 @@ export default function ProfileScreen() {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Notification Pre-Prompt Modal */}
+      <NotificationPrePrompt
+        visible={showNotificationPrompt}
+        onAllow={handleNotificationEnable}
+        onNotNow={handleNotificationDismiss}
+      />
     </View>
   );
 }
