@@ -100,7 +100,7 @@ function MasonryCard({ proof, height, index, onPress }: MasonryCardProps) {
               ))}
             </View>
             <View style={styles.noteContent}>
-              <Text style={styles.noteQuote}>"</Text>
+              <Text style={styles.noteQuote}>&quot;</Text>
               <Text style={styles.noteText} numberOfLines={4}>
                 {proof.note}
               </Text>

@@ -48,6 +48,7 @@ export interface ProofEntry {
   createdAt: string;
   hashtags: string[];
   reactions: string[];
+  filter?: string;
 }
 
 export interface ChatMessage {

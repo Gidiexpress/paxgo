@@ -82,7 +82,7 @@ export function CoreActionCard({
         {action.limitingBelief && (
           <View style={styles.beliefTag}>
             <Text style={styles.beliefLabel}>Addresses:</Text>
-            <Text style={styles.beliefText}>"{action.limitingBelief}"</Text>
+            <Text style={styles.beliefText}>&quot;{action.limitingBelief}&quot;</Text>
           </View>
         )}
 

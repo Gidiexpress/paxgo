@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -14,6 +14,8 @@ import {
   Inter_700Bold,
 } from '@expo-google-fonts/inter';
 import * as SplashScreen from 'expo-splash-screen';
+import { AuthProvider } from '@fastshot/auth';
+import { supabase } from '@/lib/supabase';
 import { colors } from '@/constants/theme';
 
 // Prevent splash screen from auto-hiding
@@ -44,7 +46,15 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <AuthProvider
+      supabaseClient={supabase}
+      routes={{
+        login: '/journey/create-account',
+        afterLogin: '/journey/first-dialogue',
+        protected: ['tabs', 'home', 'main'],
+        guest: [],
+      }}
+    >
       <StatusBar style="dark" />
       <Stack
         screenOptions={{
@@ -54,6 +64,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" />
+        <Stack.Screen name="journey" />
         <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
         <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen
@@ -78,7 +89,7 @@ export default function RootLayout() {
           }}
         />
       </Stack>
-    </>
+    </AuthProvider>
   );
 }
 
