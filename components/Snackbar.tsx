@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,8 +24,8 @@ import { SnackbarConfig, SnackbarType, useSnackbar } from '@/contexts/SnackbarCo
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SNACKBAR_MARGIN = spacing.lg;
-const SNACKBAR_WIDTH = SCREEN_WIDTH - SNACKBAR_MARGIN * 2;
-const SWIPE_THRESHOLD = 80;
+const SWIPE_THRESHOLD_X = 80; // Horizontal swipe threshold
+const SWIPE_THRESHOLD_Y = 50; // Vertical swipe threshold (swipe up to dismiss)
 
 // Color palette for different snackbar types
 const SNACKBAR_COLORS: Record<SnackbarType, {
@@ -76,8 +76,8 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
   const insets = useSafeAreaInsets();
   const colorScheme = SNACKBAR_COLORS[config.type];
 
-  // Animation values
-  const translateY = useSharedValue(100);
+  // Animation values - start above screen (negative Y) for top positioning
+  const translateY = useSharedValue(-100);
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(0);
   const scale = useSharedValue(0.9);
@@ -85,22 +85,33 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
 
   // For gesture handling
   const contextX = useSharedValue(0);
-  const isGestureActive = useSharedValue(false);
+  const contextY = useSharedValue(0);
 
   // Progress bar timer
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Entry animation
+  // Dismiss animation - slide up and out for top positioning
+  const dismissSnackbar = () => {
+    translateY.value = withTiming(-80, { duration: 180 });
+    opacity.value = withTiming(0, { duration: 180 });
+    scale.value = withTiming(0.9, { duration: 180 }, (finished) => {
+      if (finished) {
+        runOnJS(onDismiss)(config.id);
+      }
+    });
+  };
+
+  // Entry animation - slide down from top
   useEffect(() => {
     translateY.value = withSpring(0, {
-      damping: 15,
-      stiffness: 150,
+      damping: 18,
+      stiffness: 140,
       mass: 0.8,
     });
-    opacity.value = withTiming(1, { duration: 200 });
+    opacity.value = withTiming(1, { duration: 250 });
     scale.value = withSpring(1, {
-      damping: 12,
-      stiffness: 180,
+      damping: 14,
+      stiffness: 160,
     });
   }, []);
 
@@ -124,20 +135,10 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
         clearTimeout(timerRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.duration]);
 
-  const dismissSnackbar = () => {
-    // Exit animation
-    translateY.value = withTiming(-20, { duration: 150 });
-    opacity.value = withTiming(0, { duration: 150 });
-    scale.value = withTiming(0.9, { duration: 150 }, (finished) => {
-      if (finished) {
-        runOnJS(onDismiss)(config.id);
-      }
-    });
-  };
-
-  const dismissBySwipe = (direction: 'left' | 'right') => {
+  const dismissBySwipeHorizontal = (direction: 'left' | 'right') => {
     const targetX = direction === 'left' ? -SCREEN_WIDTH : SCREEN_WIDTH;
     translateX.value = withTiming(targetX, { duration: 200 });
     opacity.value = withTiming(0, { duration: 200 }, (finished) => {
@@ -147,33 +148,62 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
     });
   };
 
-  // Pan gesture for swipe to dismiss
+  const dismissBySwipeUp = () => {
+    // Swipe up dismisses to top
+    translateY.value = withTiming(-150, { duration: 200 });
+    opacity.value = withTiming(0, { duration: 200 }, (finished) => {
+      if (finished) {
+        runOnJS(onDismiss)(config.id);
+      }
+    });
+  };
+
+  // Pan gesture for swipe to dismiss - supports both horizontal and vertical (up) swipes
   const panGesture = Gesture.Pan()
     .onStart(() => {
       contextX.value = translateX.value;
-      isGestureActive.value = true;
+      contextY.value = translateY.value;
     })
     .onUpdate((event) => {
+      // Allow horizontal movement
       translateX.value = contextX.value + event.translationX;
+      // Only allow upward vertical movement (negative Y)
+      if (event.translationY < 0) {
+        translateY.value = contextY.value + event.translationY;
+      }
     })
     .onEnd((event) => {
-      isGestureActive.value = false;
+      const absX = Math.abs(event.translationX);
+      const absY = Math.abs(event.translationY);
 
-      if (Math.abs(event.translationX) > SWIPE_THRESHOLD) {
-        // Swipe threshold exceeded - dismiss
-        runOnJS(dismissBySwipe)(event.translationX < 0 ? 'left' : 'right');
-      } else {
-        // Bounce back
-        translateX.value = withSpring(0, {
-          damping: 15,
-          stiffness: 200,
-        });
+      // Check if swipe up exceeds threshold
+      if (event.translationY < -SWIPE_THRESHOLD_Y && absY > absX) {
+        runOnJS(dismissBySwipeUp)();
+        return;
       }
+
+      // Check horizontal swipe threshold
+      if (absX > SWIPE_THRESHOLD_X && absX > absY) {
+        runOnJS(dismissBySwipeHorizontal)(event.translationX < 0 ? 'left' : 'right');
+        return;
+      }
+
+      // Bounce back to original position
+      translateX.value = withSpring(0, {
+        damping: 15,
+        stiffness: 200,
+      });
+      translateY.value = withSpring(0, {
+        damping: 15,
+        stiffness: 200,
+      });
     });
 
-  // Stack offset calculation for multiple snackbars
-  const stackOffset = (totalCount - 1 - index) * 8;
-  const stackScale = 1 - (totalCount - 1 - index) * 0.05;
+  // Stack offset calculation for multiple snackbars - stack downward from top
+  // Newer notifications (higher index) appear at the top, older ones stack below
+  const stackOffset = index * 8;
+  const stackScale = 1 - index * 0.03;
+  const stackOpacity = 1 - index * 0.15;
 
   const animatedContainerStyle = useAnimatedStyle(() => {
     const rotateZ = interpolate(
@@ -190,7 +220,8 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
         { scale: scale.value * stackScale },
         { rotateZ: `${rotateZ}deg` },
       ],
-      opacity: opacity.value,
+      opacity: opacity.value * stackOpacity,
+      zIndex: totalCount - index, // Newer snackbars on top
     };
   });
 
@@ -213,7 +244,8 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
         style={[
           styles.snackbarContainer,
           {
-            bottom: insets.bottom + 90 + spacing.md, // Above tab bar
+            // Position at top with safe area insets for status bar/notch
+            top: insets.top + spacing.sm,
           },
           animatedContainerStyle,
         ]}
@@ -301,9 +333,12 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
 export function SnackbarContainer() {
   const { snackbars, hideSnackbar } = useSnackbar();
 
+  // Reverse the order so newest snackbars appear at the top
+  const reversedSnackbars = [...snackbars].reverse();
+
   return (
     <>
-      {snackbars.map((snackbar, index) => (
+      {reversedSnackbars.map((snackbar, index) => (
         <SnackbarItem
           key={snackbar.id}
           config={snackbar}
@@ -326,10 +361,10 @@ const styles = StyleSheet.create({
   },
   glowEffect: {
     position: 'absolute',
-    top: 4,
+    top: -4,
     left: 8,
     right: 8,
-    bottom: -4,
+    bottom: 4,
     borderRadius: borderRadius.full,
     opacity: 0.6,
   },
