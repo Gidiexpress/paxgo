@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +18,8 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@fastshot/auth';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 import {
   colors,
   typography,
@@ -31,6 +32,10 @@ type AuthMode = 'social' | 'email-signin' | 'email-signup' | 'forgot-password';
 
 export default function CreateAccountScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ error?: string }>();
+  const { showSuccess, showError, showInfo } = useSnackbar();
+
   const {
     signInWithGoogle,
     signInWithApple,
@@ -41,12 +46,44 @@ export default function CreateAccountScreen() {
     error,
     clearError,
     pendingPasswordReset,
+    isAuthenticated,
   } = useAuth();
 
   const [authMode, setAuthMode] = useState<AuthMode>('social');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Handle navigation after successful authentication
+  const handleAuthSuccess = useCallback(() => {
+    if (isNavigating) return;
+    setIsNavigating(true);
+
+    showSuccess('Welcome! Let\'s continue your journey', {
+      icon: '🎉',
+      duration: 2500,
+    });
+
+    // Small delay to show the snackbar before navigating
+    setTimeout(() => {
+      router.replace('/(tabs)');
+    }, 300);
+  }, [isNavigating, router, showSuccess]);
+
+  // Watch for authentication state changes
+  useEffect(() => {
+    if (isAuthenticated && !isLoading && !isNavigating) {
+      handleAuthSuccess();
+    }
+  }, [isAuthenticated, isLoading, isNavigating, handleAuthSuccess]);
+
+  // Show error from URL params (from OAuth callback)
+  useEffect(() => {
+    if (params.error) {
+      showError(params.error);
+    }
+  }, [params.error, showError]);
 
   // Handle error types for better UX
   useEffect(() => {
@@ -60,49 +97,43 @@ export default function CreateAccountScreen() {
 
     // Handle specific error cases
     if (error.message?.includes('Invalid login credentials')) {
-      Alert.alert(
-        'Sign In Failed',
-        'The email or password you entered is incorrect. Please try again or reset your password.',
-        [
-          { text: 'Try Again', style: 'cancel' },
-          {
-            text: 'Reset Password',
-            onPress: () => {
-              clearError();
-              setAuthMode('forgot-password');
-            }
+      showError('Invalid email or password. Please try again.', {
+        action: {
+          label: 'Reset',
+          onPress: () => {
+            clearError();
+            setAuthMode('forgot-password');
           },
-        ]
-      );
+        },
+        duration: 6000,
+      });
     } else if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-      Alert.alert(
-        'Account Exists',
-        'An account with this email already exists. Try signing in or resetting your password.',
-        [
-          {
-            text: 'Sign In',
-            onPress: () => {
-              clearError();
-              setAuthMode('email-signin');
-            }
+      // Handle existing user gracefully - offer to sign in
+      showInfo('Account exists! Try signing in instead.', {
+        icon: '👋',
+        action: {
+          label: 'Sign In',
+          onPress: () => {
+            clearError();
+            setAuthMode('email-signin');
           },
-          {
-            text: 'Reset Password',
-            onPress: () => {
-              clearError();
-              setAuthMode('forgot-password');
-            }
-          },
-        ]
-      );
+        },
+        duration: 6000,
+      });
+    } else if (error.message?.includes('Email address') && error.message?.includes('invalid')) {
+      showError('Please enter a valid email address');
+    } else if (error.message) {
+      showError(error.message);
     }
-  }, [error, clearError]);
+  }, [error, clearError, showError, showInfo]);
 
   const handleGoogleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showInfo('Opening Google sign-in...', { duration: 2000 });
     try {
+      clearError();
       await signInWithGoogle();
-      // Navigation is handled automatically by AuthProvider
+      // Navigation will be handled by the auth state listener
     } catch (err) {
       console.error('Google sign in error:', err);
     }
@@ -110,9 +141,11 @@ export default function CreateAccountScreen() {
 
   const handleAppleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    showInfo('Opening Apple sign-in...', { duration: 2000 });
     try {
+      clearError();
       await signInWithApple();
-      // Navigation is handled automatically by AuthProvider
+      // Navigation will be handled by the auth state listener
     } catch (err) {
       console.error('Apple sign in error:', err);
     }
@@ -120,17 +153,24 @@ export default function CreateAccountScreen() {
 
   const handleEmailSubmit = async () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      showError('Please enter your email address');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      showError('Please enter a valid email address');
       return;
     }
 
     if (!password.trim() || password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showError('Password must be at least 6 characters');
       return;
     }
 
     if (authMode === 'email-signup' && password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showError('Passwords do not match');
       return;
     }
 
@@ -139,26 +179,42 @@ export default function CreateAccountScreen() {
     try {
       clearError();
       if (authMode === 'email-signup') {
+        showInfo('Creating your account...', { duration: 3000 });
         const result = await signUpWithEmail(email, password);
+
         if (result.emailConfirmationRequired) {
-          Alert.alert(
-            'Check Your Email',
-            `We've sent a verification link to ${email}. Please verify your email to continue.`,
-            [{ text: 'OK', onPress: () => setAuthMode('email-signin') }]
-          );
+          showSuccess(`Verification email sent to ${email}`, {
+            icon: '✉️',
+            duration: 5000,
+          });
+          // Switch to sign-in mode after showing the message
+          setTimeout(() => {
+            setAuthMode('email-signin');
+            setPassword('');
+            setConfirmPassword('');
+          }, 1500);
         }
+        // If no email confirmation required, the auth state listener will handle navigation
       } else {
+        showInfo('Signing you in...', { duration: 2000 });
         await signInWithEmail(email, password);
-        // Navigation is handled automatically by AuthProvider
+        // Navigation will be handled by the auth state listener
       }
     } catch (err) {
       console.error('Email auth error:', err);
+      // Error handling is done by the error effect above
     }
   };
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      Alert.alert('Error', 'Please enter your email address');
+      showError('Please enter your email address');
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      showError('Please enter a valid email address');
       return;
     }
 
@@ -167,13 +223,13 @@ export default function CreateAccountScreen() {
     try {
       clearError();
       await resetPassword(email);
-      // The pendingPasswordReset state will be set automatically
+      showSuccess(`Reset link sent to ${email}`, {
+        icon: '✉️',
+        duration: 4000,
+      });
     } catch (err) {
       console.error('Password reset error:', err);
-      Alert.alert(
-        'Error',
-        'Could not send reset email. Please check your email address and try again.'
-      );
+      showError('Could not send reset email. Please try again.');
     }
   };
 
@@ -274,6 +330,7 @@ export default function CreateAccountScreen() {
         keyboardType="email-address"
         autoCapitalize="none"
         autoCorrect={false}
+        autoFocus={authMode !== 'social'}
       />
 
       <TextInput
@@ -294,12 +351,6 @@ export default function CreateAccountScreen() {
           onChangeText={setConfirmPassword}
           secureTextEntry
         />
-      )}
-
-      {error && error.type !== 'BROWSER_DISMISSED' && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error.message}</Text>
-        </View>
       )}
 
       <TouchableOpacity
@@ -428,12 +479,6 @@ export default function CreateAccountScreen() {
           autoFocus
         />
 
-        {error && error.type !== 'BROWSER_DISMISSED' && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error.message}</Text>
-          </View>
-        )}
-
         <TouchableOpacity
           style={styles.submitButton}
           onPress={handleForgotPassword}
@@ -464,6 +509,16 @@ export default function CreateAccountScreen() {
       </Animated.View>
     );
   };
+
+  // Show loading state during navigation
+  if (isNavigating) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <ActivityIndicator size="large" color={colors.boldTerracotta} />
+        <Text style={styles.loadingText}>Welcome aboard! 🎉</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -542,6 +597,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.parchmentWhite,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
+    color: colors.midnightNavy,
+    marginTop: spacing.xl,
   },
   keyboardView: {
     flex: 1,
@@ -708,20 +773,6 @@ const styles = StyleSheet.create({
     color: colors.midnightNavy,
     marginBottom: spacing.md,
     ...shadows.sm,
-  },
-  errorContainer: {
-    backgroundColor: colors.boldTerracotta + '15',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.boldTerracotta + '30',
-  },
-  errorText: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.sm,
-    color: colors.boldTerracotta,
-    textAlign: 'center',
   },
   forgotPasswordButton: {
     alignItems: 'center',

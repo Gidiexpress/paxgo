@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useFonts,
   PlayfairDisplay_700Bold,
@@ -17,6 +18,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { AuthProvider } from '@fastshot/auth';
 import { supabase } from '@/lib/supabase';
 import { colors } from '@/constants/theme';
+import { SnackbarProvider } from '@/contexts/SnackbarContext';
+import { SnackbarContainer } from '@/components/Snackbar';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -46,50 +49,55 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider
-      supabaseClient={supabase}
-      routes={{
-        login: '/journey/create-account',
-        afterLogin: '/journey/first-dialogue',
-        protected: ['tabs', 'home', 'main'],
-        guest: [],
-      }}
-    >
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'slide_from_right',
-          contentStyle: { backgroundColor: colors.parchmentWhite },
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider
+        supabaseClient={supabase}
+        routes={{
+          login: '/journey/create-account',
+          afterLogin: '/(tabs)',
+          protected: ['tabs', 'home', 'main'],
+          guest: [],
         }}
       >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="journey" />
-        <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
-        <Stack.Screen
-          name="paywall"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen
-          name="add-proof"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-        <Stack.Screen
-          name="add-action"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-      </Stack>
-    </AuthProvider>
+        <SnackbarProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              contentStyle: { backgroundColor: colors.parchmentWhite },
+            }}
+          >
+            <Stack.Screen name="index" />
+            <Stack.Screen name="journey" />
+            <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
+            <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+            <Stack.Screen
+              name="paywall"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="add-proof"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+            <Stack.Screen
+              name="add-action"
+              options={{
+                presentation: 'modal',
+                animation: 'slide_from_bottom',
+              }}
+            />
+          </Stack>
+          <SnackbarContainer />
+        </SnackbarProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

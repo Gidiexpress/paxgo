@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,6 +27,7 @@ import { colors, typography, borderRadius, spacing, shadows } from '@/constants/
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useDatabaseStatus } from '@/hooks/useDatabaseStatus';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 // Shield icon component for private infrastructure visual
 function ShieldIcon({ size = 24, color = colors.vibrantTeal }: { size?: number; color?: string }) {
@@ -392,6 +392,7 @@ export default function DatabaseStatusScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { status, testDataOperations } = useDatabaseStatus();
+  const { showSuccess, showError, showInfo } = useSnackbar();
   const [handshakeItems, setHandshakeItems] = useState<HandshakeItem[]>([]);
   const [isHandshaking, setIsHandshaking] = useState(false);
   const [handshakeComplete, setHandshakeComplete] = useState(false);
@@ -540,10 +541,18 @@ export default function DatabaseStatusScreen() {
 
     if (allSuccessful) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess('Private infrastructure verified! All core tables ready.', {
+        icon: '🛡️',
+        duration: 4000,
+      });
     } else {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      showInfo('Some tables need attention. Check the handshake results.', {
+        icon: '⚠️',
+        duration: 5000,
+      });
     }
-  }, [initializeHandshakeItems]);
+  }, [initializeHandshakeItems, showSuccess, showInfo]);
 
   // Handle data operations test
   const handleTestOperations = async () => {
@@ -554,9 +563,15 @@ export default function DatabaseStatusScreen() {
     setIsTestingOperations(false);
 
     if (result.errors.length > 0) {
-      Alert.alert('Data Test Results', result.errors.join('\n'));
+      showError(result.errors[0], {
+        icon: '⚠️',
+        duration: 5000,
+      });
     } else {
-      Alert.alert('Success', 'All data operations working correctly!\nYour Gabby AI coaching sessions, roadmap progress, and photo uploads are now routed to your personal database.');
+      showSuccess('All data operations working correctly! Your data is now routed to your personal database.', {
+        icon: '🛡️',
+        duration: 4000,
+      });
     }
   };
 

@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,9 +17,9 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useProofs } from '@/hooks/useStorage';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 
 // Journal filter styles
 const FILTER_STYLES = [
@@ -35,6 +34,7 @@ export default function AddProofScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ actionId?: string; actionTitle?: string }>();
   const { addProof } = useProofs();
+  const { showSuccess, showError, showWarning } = useSnackbar();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -45,7 +45,10 @@ export default function AddProofScreen() {
   const pickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant camera roll access to add photos.');
+      showWarning('Please grant camera roll access to add photos.', {
+        icon: '📱',
+        duration: 4000,
+      });
       return;
     }
 
@@ -65,7 +68,10 @@ export default function AddProofScreen() {
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please grant camera access to take photos.');
+      showWarning('Please grant camera access to take photos.', {
+        icon: '📷',
+        duration: 4000,
+      });
       return;
     }
 
@@ -83,7 +89,10 @@ export default function AddProofScreen() {
 
   const handleSubmit = async () => {
     if (!note.trim() && !imageUri) {
-      Alert.alert('Add content', 'Please add a photo or note to capture your win.');
+      showWarning('Please add a photo or note to capture your win.', {
+        icon: '✏️',
+        duration: 3000,
+      });
       return;
     }
 
@@ -104,10 +113,16 @@ export default function AddProofScreen() {
         filter: selectedFilter,
       });
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSuccess('Win captured! 🎉', {
+        icon: '📸',
+        duration: 3000,
+      });
       router.back();
     } catch {
-      Alert.alert('Error', 'Failed to save proof. Please try again.');
+      showError('Failed to save proof. Please try again.', {
+        icon: '❌',
+        duration: 4000,
+      });
     } finally {
       setIsLoading(false);
     }
