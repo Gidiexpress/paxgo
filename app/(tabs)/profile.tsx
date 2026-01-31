@@ -158,6 +158,12 @@ export default function ProfileScreen() {
       onPress: handleNotificationPress,
     },
     {
+      icon: '🗄️',
+      title: 'Database Status',
+      subtitle: 'Check connection & tables',
+      onPress: () => router.push('/database-status'),
+    },
+    {
       icon: '🎨',
       title: 'Appearance',
       onPress: () => {},

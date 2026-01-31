@@ -9,3 +9,4 @@ export {
 } from './useStorage';
 export { useSubscription } from './useSubscription';
 export { useInstantReframe, usePermissionSlip, useMicroActions } from './useAI';
+export { useDatabaseStatus, isDatabaseConfigured } from './useDatabaseStatus';

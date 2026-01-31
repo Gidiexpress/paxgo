@@ -93,6 +93,71 @@ export type Database = {
           },
         ]
       }
+      dreams: {
+        Row: {
+          category: string | null
+          completed_actions: number | null
+          core_motivation: string | null
+          created_at: string | null
+          current_streak: number | null
+          description: string | null
+          five_whys_completed: boolean | null
+          id: string
+          is_active: boolean | null
+          last_activity_at: string | null
+          longest_streak: number | null
+          permission_slip_signed: boolean | null
+          title: string
+          total_actions: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          completed_actions?: number | null
+          core_motivation?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          description?: string | null
+          five_whys_completed?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          longest_streak?: number | null
+          permission_slip_signed?: boolean | null
+          title: string
+          total_actions?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          completed_actions?: number | null
+          core_motivation?: string | null
+          created_at?: string | null
+          current_streak?: number | null
+          description?: string | null
+          five_whys_completed?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          last_activity_at?: string | null
+          longest_streak?: number | null
+          permission_slip_signed?: boolean | null
+          title?: string
+          total_actions?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dreams_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       five_whys_responses: {
         Row: {
           created_at: string | null
@@ -617,6 +682,10 @@ export type DbSquadMember = Tables<'squad_members'>
 export type DbSquadPost = Tables<'squad_posts'>
 export type DbActionRoadmap = Tables<'action_roadmaps'>
 export type DbRoadmapAction = Tables<'roadmap_actions'>
+export type DbDream = Tables<'dreams'>
+export type DbFiveWhysSession = Tables<'five_whys_sessions'>
+export type DbFiveWhysResponse = Tables<'five_whys_responses'>
+export type DbPermissionSlip = Tables<'permission_slips'>
 
 // Chat message metadata types for tokens
 export interface ChatTokenMetadata {
