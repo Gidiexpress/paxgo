@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "The Bold Move",
-    "slug": "the-bold-move",
+    "name": "Paxgo",
+    "slug": "paxgo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -37,7 +37,7 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "baseUrl": "/6c87afd6-6091-4425-9eaa-13768a3fb575/dev-preview/"
+      "baseUrl": ""
     }
   }
 }

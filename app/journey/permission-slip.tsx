@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
+  TouchableOpacity,
   ActivityIndicator,
   Share,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,19 +15,15 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-  withDelay,
-  Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTextGeneration } from '@fastshot/ai';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '@fastshot/auth';
+import { useTextGeneration } from '@fastshot/ai';
 import {
   colors,
   typography,
@@ -34,52 +31,46 @@ import {
   spacing,
   shadows,
 } from '@/constants/theme';
+import {
+  DigitalPermissionSlip,
+  PermissionSlipStyleSelector,
+} from '@/components/DigitalPermissionSlip';
+import { PermissionSlipVisualStyle } from '@/types/database';
+import {
+  createPermissionSlip,
+  signPermissionSlip,
+  savePermissionSlipAsProof,
+} from '@/services/permissionSlipService';
+import {
+  generatePermissionStatement,
+  getUserLatestFiveWhysSession,
+} from '@/services/fiveWhysService';
+import { ConfettiAnimation } from '@/components/ConfettiAnimation';
 
 const PERMISSION_SLIP_KEY = '@boldmove_permission_slip';
-
-interface PermissionSlipData {
-  headline: string;
-  affirmation: string;
-  date: string;
-}
 
 export default function PermissionSlipScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { generateText, isLoading } = useTextGeneration();
+  const { generateText, isLoading: aiLoading } = useTextGeneration();
+  const permissionSlipRef = useRef<View>(null);
 
-  const [slipData, setSlipData] = useState<PermissionSlipData | null>(null);
-  const [isSigned, setIsSigned] = useState(false);
+  // State
+  const [step, setStep] = useState<'style' | 'preview' | 'signed'>('style');
+  const [selectedStyle, setSelectedStyle] = useState<PermissionSlipVisualStyle>('minimalist');
+  const [permissionStatement, setPermissionStatement] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(true);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [signedAt, setSignedAt] = useState<string | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [slipId, setSlipId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Animation values
-  const shimmerPosition = useSharedValue(0);
-  const sealScale = useSharedValue(0);
-  const sealRotation = useSharedValue(-180);
-
+  // Load data and generate permission statement
   useEffect(() => {
-    // Shimmer animation
-    shimmerPosition.value = withRepeat(
-      withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, []);
-
-  const shimmerStyle = useAnimatedStyle(() => ({
-    opacity: 0.3 + shimmerPosition.value * 0.4,
-  }));
-
-  const sealStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: sealScale.value },
-      { rotate: `${sealRotation.value}deg` },
-    ],
-  }));
-
-  // Load data and generate permission slip
-  useEffect(() => {
-    const generatePermissionSlip = async () => {
+    const generateContent = async () => {
+      setIsGenerating(true);
       try {
         const [storedDream, storedMotivation] = await Promise.all([
           AsyncStorage.getItem('@boldmove_dream'),
@@ -88,91 +79,178 @@ export default function PermissionSlipScreen() {
 
         const dreamText = storedDream || 'achieve my dream';
         const motivationText = storedMotivation || 'becoming my best self';
+        const userName = user?.email?.split('@')[0] || 'Bold Dreamer';
 
-        const prompt = `Generate a personalized "Permission Slip" - a certificate of self-permission for someone embarking on a bold journey.
+        // Try to get Five Whys session for richer context
+        let fiveWhysResponses: any[] = [];
+        if (user?.id) {
+          const session = await getUserLatestFiveWhysSession(user.id);
+          if (session) {
+            fiveWhysResponses = session.responses;
+          }
+        }
+
+        // Generate permission statement with AI
+        let statement: string;
+        if (fiveWhysResponses.length > 0) {
+          const rootMotivation = fiveWhysResponses[fiveWhysResponses.length - 1]?.user_response || motivationText;
+          statement = await generatePermissionStatement(
+            dreamText,
+            rootMotivation,
+            fiveWhysResponses,
+            userName
+          );
+        } else {
+          // Fallback to simpler generation
+          const prompt = `Generate a personalized "Permission Statement" - a certificate of self-permission.
 
 Their dream: "${dreamText}"
-Their core motivation (why it matters): "${motivationText}"
+Their core motivation: "${motivationText}"
 
-Generate TWO things in this exact format:
-HEADLINE: [A powerful 5-7 word headline granting permission, starting with "I give myself permission to..."]
-AFFIRMATION: [A 2-sentence personalized affirmation that acknowledges their fear/hesitation but affirms their worthiness and capability. Make it feel like a warm hug. Include one emoji.]
+Write a Permission Statement that:
+1. Starts with "I give myself permission to..." or "You have permission to..."
+2. Is 2-3 powerful, meaningful sentences
+3. Acknowledges their dream and deeper motivation
+4. Feels like a warm, empowering gift
 
-Keep it genuine, not cheesy. This should feel like a premium, meaningful document.`;
+Keep it elegant and personal. No emojis.`;
 
-        const response = await generateText(prompt);
-
-        if (response) {
-          // Parse the response
-          const headlineMatch = response.match(/HEADLINE:\s*(.+)/i);
-          const affirmationMatch = response.match(/AFFIRMATION:\s*(.+)/is);
-
-          const headline = headlineMatch
-            ? headlineMatch[1].trim()
-            : `I give myself permission to pursue ${dreamText}`;
-          const affirmation = affirmationMatch
-            ? affirmationMatch[1].trim()
-            : `You are worthy of this dream. Take that first step - the universe is waiting for you. ✨`;
-
-          const data: PermissionSlipData = {
-            headline,
-            affirmation,
-            date: new Date().toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            }),
-          };
-
-          setSlipData(data);
-          await AsyncStorage.setItem(PERMISSION_SLIP_KEY, JSON.stringify(data));
+          const response = await generateText(prompt);
+          statement = response || `You have permission to pursue ${dreamText} with your whole heart. Your desire for this comes from a beautiful place within you—honor it.`;
         }
+
+        setPermissionStatement(statement);
       } catch (error) {
-        console.error('Failed to generate permission slip:', error);
-        // Fallback
-        setSlipData({
-          headline: 'I give myself permission to take bold action',
-          affirmation:
-            'You are worthy of this dream. The path ahead may be uncertain, but your courage to begin is already remarkable. ✨',
-          date: new Date().toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          }),
-        });
+        console.error('Failed to generate permission statement:', error);
+        setPermissionStatement(
+          'You have permission to take bold action toward your dreams. Your courage to begin is already remarkable.'
+        );
+      } finally {
+        setIsGenerating(false);
       }
     };
 
-    generatePermissionSlip();
+    generateContent();
   }, []);
 
-  const handleSign = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setIsSigned(true);
+  const handleStyleSelect = (style: PermissionSlipVisualStyle) => {
+    setSelectedStyle(style);
+  };
 
-    // Animate the seal
-    sealScale.value = withDelay(
-      200,
-      withSequence(
-        withTiming(1.2, { duration: 300, easing: Easing.out(Easing.elastic(1)) }),
-        withTiming(1, { duration: 200 })
-      )
-    );
-    sealRotation.value = withDelay(
-      200,
-      withTiming(0, { duration: 500, easing: Easing.out(Easing.elastic(1)) })
-    );
+  const handleContinueToPreview = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setStep('preview');
+  };
+
+  const handleBackToStyle = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setStep('style');
+  };
+
+  const handleSign = async (signature: string) => {
+    setIsSaving(true);
+    const now = new Date().toISOString();
+    setSignatureData(signature);
+    setSignedAt(now);
+
+    try {
+      // Save to Supabase
+      if (user?.id) {
+        const storedDream = await AsyncStorage.getItem('@boldmove_dream');
+        const dreamId = storedDream ? `dream-${Date.now()}` : undefined;
+
+        const slip = await createPermissionSlip(
+          user.id,
+          permissionStatement,
+          selectedStyle,
+          undefined, // sessionId
+          dreamId
+        );
+
+        if (slip) {
+          const signedSlip = await signPermissionSlip(slip.id, signature);
+          if (signedSlip) {
+            setSlipId(signedSlip.id);
+            // Save as proof
+            await savePermissionSlipAsProof(user.id, signedSlip.id);
+          }
+        }
+      }
+
+      // Save locally as well
+      await AsyncStorage.setItem(
+        PERMISSION_SLIP_KEY,
+        JSON.stringify({
+          statement: permissionStatement,
+          style: selectedStyle,
+          signature,
+          signedAt: now,
+        })
+      );
+
+      // Show celebration
+      setShowCelebration(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => setShowCelebration(false), 3000);
+      setStep('signed');
+    } catch (error) {
+      console.error('Error saving permission slip:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleShare = async () => {
-    if (!slipData) return;
-
     try {
-      await Share.share({
-        message: `🌟 My Permission Slip 🌟\n\n"${slipData.headline}"\n\n${slipData.affirmation}\n\nSigned on ${slipData.date}\n\n#TheBoldMove #PermissionGranted`,
-      });
+      // Try to capture the permission slip as an image
+      if (permissionSlipRef.current) {
+        const uri = await captureRef(permissionSlipRef, {
+          format: 'png',
+          quality: 1,
+        });
+
+        if (Platform.OS === 'ios') {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'image/png',
+            dialogTitle: 'Share your Permission Slip',
+            UTI: 'public.png',
+          });
+        } else {
+          await Share.share({
+            message: `My Permission Slip\n\n"${permissionStatement}"\n\nSigned on ${new Date().toLocaleDateString()}\n\n#TheBoldMove #PermissionGranted`,
+          });
+        }
+      } else {
+        // Fallback to text share
+        await Share.share({
+          message: `My Permission Slip\n\n"${permissionStatement}"\n\nSigned on ${new Date().toLocaleDateString()}\n\n#TheBoldMove #PermissionGranted`,
+        });
+      }
     } catch (error) {
       console.error('Failed to share:', error);
+    }
+  };
+
+  const handleSaveToGallery = async () => {
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Please grant permission to save images');
+        return;
+      }
+
+      if (permissionSlipRef.current) {
+        const uri = await captureRef(permissionSlipRef, {
+          format: 'png',
+          quality: 1,
+        });
+        await MediaLibrary.saveToLibraryAsync(uri);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        alert('Permission slip saved to your gallery!');
+      }
+    } catch (error) {
+      console.error('Failed to save to gallery:', error);
+      alert('Failed to save image');
     }
   };
 
@@ -188,11 +266,28 @@ Keep it genuine, not cheesy. This should feel like a premium, meaningful documen
     return 'Bold Adventurer';
   };
 
-  if (isLoading || !slipData) {
+  // Loading state
+  if (isGenerating) {
     return (
       <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={[colors.midnightNavy, '#0A2540']}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.loadingContent}>
-          <ActivityIndicator size="large" color={colors.champagneGold} />
+          <View style={styles.loadingIconContainer}>
+            <Animated.View
+              entering={FadeIn}
+              style={styles.loadingIconGlow}
+            >
+              <LinearGradient
+                colors={[colors.champagneGold + '40', colors.champagneGold + '10', 'transparent']}
+                style={styles.glowGradient}
+              />
+            </Animated.View>
+            <Text style={styles.loadingIcon}>📜</Text>
+          </View>
+          <ActivityIndicator size="large" color={colors.champagneGold} style={{ marginTop: spacing.xl }} />
           <Text style={styles.loadingTitle}>Crafting Your Permission Slip...</Text>
           <Text style={styles.loadingSubtitle}>
             A personalized certificate just for you
@@ -204,125 +299,155 @@ Keep it genuine, not cheesy. This should feel like a premium, meaningful documen
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      <LinearGradient
+        colors={[colors.midnightNavy, '#0A2540']}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Celebration confetti */}
+      <ConfettiAnimation active={showCelebration} />
+
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + spacing['4xl'] },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
         <Animated.View entering={FadeInDown} style={styles.header}>
-          <Text style={styles.headerTitle}>Your Permission Slip</Text>
+          <Text style={styles.headerTitle}>
+            {step === 'style' ? 'Choose Your Style' : 'Your Permission Slip'}
+          </Text>
           <Text style={styles.headerSubtitle}>
-            Official authorization to be bold
+            {step === 'style'
+              ? 'Select a visual style for your permission slip'
+              : step === 'preview'
+              ? 'Sign to make it official'
+              : 'Your commitment is sealed'}
           </Text>
         </Animated.View>
 
-        {/* Certificate */}
-        <Animated.View entering={FadeIn.delay(200)} style={styles.certificateWrapper}>
-          {/* Gold shimmer border */}
-          <Animated.View style={[styles.shimmerBorder, shimmerStyle]}>
-            <LinearGradient
-              colors={[colors.champagneGold, colors.goldLight, colors.champagneGold]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.shimmerGradient}
+        {/* Step 1: Style Selection */}
+        {step === 'style' && (
+          <Animated.View entering={FadeIn.delay(200)}>
+            <PermissionSlipStyleSelector
+              selectedStyle={selectedStyle}
+              onSelectStyle={handleStyleSelect}
             />
-          </Animated.View>
 
-          <View style={styles.certificate}>
-            {/* Decorative corners */}
-            <View style={[styles.corner, styles.cornerTL]} />
-            <View style={[styles.corner, styles.cornerTR]} />
-            <View style={[styles.corner, styles.cornerBL]} />
-            <View style={[styles.corner, styles.cornerBR]} />
-
-            {/* Certificate Header */}
-            <View style={styles.certificateHeader}>
-              <Text style={styles.certificateLabel}>OFFICIAL</Text>
-              <Text style={styles.certificateTitle}>Permission Slip</Text>
-              <View style={styles.certificateDivider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerIcon}>✦</Text>
-                <View style={styles.dividerLine} />
-              </View>
+            {/* Preview of selected style */}
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewLabel}>Preview</Text>
+              <DigitalPermissionSlip
+                permissionStatement={permissionStatement}
+                visualStyle={selectedStyle}
+                userName={getUserName()}
+                animated={false}
+              />
             </View>
 
-            {/* Main Content */}
-            <View style={styles.certificateBody}>
-              <Text style={styles.headline}>{slipData.headline}</Text>
-              <Text style={styles.affirmation}>{slipData.affirmation}</Text>
-            </View>
-
-            {/* Footer */}
-            <View style={styles.certificateFooter}>
-              <View style={styles.signatureSection}>
-                <View style={styles.signatureLine}>
-                  {isSigned && (
-                    <Animated.Text
-                      entering={FadeIn}
-                      style={styles.signatureText}
-                    >
-                      {getUserName()}
-                    </Animated.Text>
-                  )}
-                </View>
-                <Text style={styles.signatureLabel}>Your Signature</Text>
-              </View>
-
-              <View style={styles.dateSection}>
-                <Text style={styles.dateText}>{slipData.date}</Text>
-                <Text style={styles.dateLabel}>Date Issued</Text>
-              </View>
-            </View>
-
-            {/* Seal */}
-            {isSigned && (
-              <Animated.View style={[styles.seal, sealStyle]}>
-                <LinearGradient
-                  colors={[colors.champagneGold, colors.goldDark]}
-                  style={styles.sealGradient}
-                >
-                  <Text style={styles.sealText}>APPROVED</Text>
-                  <Text style={styles.sealSubtext}>✓</Text>
-                </LinearGradient>
-              </Animated.View>
-            )}
-          </View>
-        </Animated.View>
-
-        {/* Actions */}
-        <Animated.View
-          entering={FadeInUp.delay(400)}
-          style={styles.actionsContainer}
-        >
-          {!isSigned ? (
-            <TouchableOpacity style={styles.signButton} onPress={handleSign}>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleContinueToPreview}
+            >
               <LinearGradient
                 colors={[colors.champagneGold, colors.goldDark]}
-                style={styles.signGradient}
+                style={styles.buttonGradient}
               >
-                <Text style={styles.signText}>Sign & Accept</Text>
+                <Text style={styles.primaryButtonText}>Continue to Sign</Text>
               </LinearGradient>
             </TouchableOpacity>
-          ) : (
-            <>
+          </Animated.View>
+        )}
+
+        {/* Step 2: Preview and Sign */}
+        {step === 'preview' && (
+          <Animated.View entering={FadeIn.delay(200)}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleBackToStyle}
+            >
+              <Text style={styles.backButtonText}>← Change Style</Text>
+            </TouchableOpacity>
+
+            <View ref={permissionSlipRef} collapsable={false}>
+              <DigitalPermissionSlip
+                permissionStatement={permissionStatement}
+                visualStyle={selectedStyle}
+                userName={getUserName()}
+                onSign={handleSign}
+                showSignatureArea={true}
+                animated={true}
+              />
+            </View>
+
+            {isSaving && (
+              <View style={styles.savingOverlay}>
+                <ActivityIndicator size="large" color={colors.champagneGold} />
+                <Text style={styles.savingText}>Sealing your permission slip...</Text>
+              </View>
+            )}
+          </Animated.View>
+        )}
+
+        {/* Step 3: Signed - Show options */}
+        {step === 'signed' && (
+          <Animated.View entering={FadeInUp.delay(200)}>
+            <View ref={permissionSlipRef} collapsable={false}>
+              <DigitalPermissionSlip
+                permissionStatement={permissionStatement}
+                visualStyle={selectedStyle}
+                signatureData={signatureData}
+                signedAt={signedAt}
+                userName={getUserName()}
+                animated={true}
+              />
+            </View>
+
+            {/* Success message */}
+            <View style={styles.successMessage}>
+              <Text style={styles.successIcon}>✨</Text>
+              <Text style={styles.successTitle}>Permission Granted!</Text>
+              <Text style={styles.successText}>
+                Your permission slip has been saved to your Proof Gallery.
+              </Text>
+            </View>
+
+            {/* Action buttons */}
+            <View style={styles.actionsContainer}>
               <TouchableOpacity
-                style={styles.continueButton}
+                style={styles.primaryButton}
                 onPress={handleContinue}
               >
                 <LinearGradient
                   colors={[colors.boldTerracotta, colors.terracottaDark]}
-                  style={styles.continueGradient}
+                  style={styles.buttonGradient}
                 >
-                  <Text style={styles.continueText}>Take My First Bold Step →</Text>
+                  <Text style={styles.primaryButtonText}>
+                    Take My First Bold Step →
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-                <Text style={styles.shareText}>Share My Permission Slip</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </Animated.View>
+              <View style={styles.secondaryActions}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={handleShare}
+                >
+                  <Text style={styles.secondaryButtonText}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={handleSaveToGallery}
+                >
+                  <Text style={styles.secondaryButtonText}>Save to Photos</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+        )}
 
         {/* Inspirational quote */}
         <Animated.View entering={FadeInDown.delay(600)} style={styles.quoteContainer}>
@@ -349,6 +474,25 @@ const styles = StyleSheet.create({
   loadingContent: {
     alignItems: 'center',
   },
+  loadingIconContainer: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingIconGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+  },
+  glowGradient: {
+    flex: 1,
+  },
+  loadingIcon: {
+    fontSize: 48,
+  },
   loadingTitle: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize.xl,
@@ -364,7 +508,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.xl,
-    paddingBottom: spacing['4xl'],
   },
   header: {
     alignItems: 'center',
@@ -381,220 +524,93 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray400,
     marginTop: spacing.xs,
+    textAlign: 'center',
   },
-  certificateWrapper: {
-    position: 'relative',
+  previewContainer: {
+    marginTop: spacing.xl,
     marginBottom: spacing['2xl'],
   },
-  shimmerBorder: {
-    position: 'absolute',
-    top: -3,
-    left: -3,
-    right: -3,
-    bottom: -3,
-    borderRadius: borderRadius['2xl'] + 3,
-    overflow: 'hidden',
-  },
-  shimmerGradient: {
-    flex: 1,
-  },
-  certificate: {
-    backgroundColor: colors.parchmentWhite,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing['2xl'],
-    position: 'relative',
-    overflow: 'hidden',
-    ...shadows.xl,
-  },
-  corner: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderColor: colors.champagneGold,
-    opacity: 0.5,
-  },
-  cornerTL: {
-    top: spacing.lg,
-    left: spacing.lg,
-    borderTopWidth: 2,
-    borderLeftWidth: 2,
-  },
-  cornerTR: {
-    top: spacing.lg,
-    right: spacing.lg,
-    borderTopWidth: 2,
-    borderRightWidth: 2,
-  },
-  cornerBL: {
-    bottom: spacing.lg,
-    left: spacing.lg,
-    borderBottomWidth: 2,
-    borderLeftWidth: 2,
-  },
-  cornerBR: {
-    bottom: spacing.lg,
-    right: spacing.lg,
-    borderBottomWidth: 2,
-    borderRightWidth: 2,
-  },
-  certificateHeader: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  certificateLabel: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.xs,
-    color: colors.champagneGold,
-    letterSpacing: 4,
-  },
-  certificateTitle: {
-    fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['3xl'],
-    color: colors.midnightNavy,
-    marginTop: spacing.sm,
-  },
-  certificateDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    gap: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.champagneGold,
-    opacity: 0.5,
-  },
-  dividerIcon: {
-    fontSize: 12,
-    color: colors.champagneGold,
-  },
-  certificateBody: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  headline: {
-    fontFamily: typography.fontFamily.headingItalic,
-    fontSize: typography.fontSize.xl,
-    color: colors.midnightNavy,
-    textAlign: 'center',
-    lineHeight: 30,
-    marginBottom: spacing.xl,
-  },
-  affirmation: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.base,
-    color: colors.gray600,
-    textAlign: 'center',
-    lineHeight: 26,
-    paddingHorizontal: spacing.md,
-  },
-  certificateFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xl,
-    paddingTop: spacing.xl,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray200,
-  },
-  signatureSection: {
-    flex: 1,
-  },
-  signatureLine: {
-    borderBottomWidth: 1,
-    borderBottomColor: colors.midnightNavy,
-    minHeight: 30,
-    justifyContent: 'flex-end',
-    paddingBottom: spacing.xs,
-  },
-  signatureText: {
-    fontFamily: typography.fontFamily.headingItalic,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-  },
-  signatureLabel: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
-    color: colors.gray500,
-    marginTop: spacing.xs,
-  },
-  dateSection: {
-    alignItems: 'flex-end',
-  },
-  dateText: {
+  previewLabel: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.sm,
+    color: colors.champagneGold,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  backButton: {
+    marginBottom: spacing.lg,
+  },
+  backButtonText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.champagneGold,
+  },
+  primaryButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.glow,
+  },
+  buttonGradient: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
   },
-  dateLabel: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
-    color: colors.gray500,
-    marginTop: spacing.xs,
-  },
-  seal: {
+  savingOverlay: {
     position: 'absolute',
-    right: spacing.xl,
-    bottom: spacing['4xl'],
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    overflow: 'hidden',
-    ...shadows.lg,
-  },
-  sealGradient: {
-    flex: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: borderRadius['2xl'],
   },
-  sealText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: 10,
-    color: colors.midnightNavy,
-    letterSpacing: 1,
+  savingText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.parchmentWhite,
+    marginTop: spacing.md,
   },
-  sealSubtext: {
-    fontSize: 20,
-    color: colors.midnightNavy,
-    marginTop: 2,
+  successMessage: {
+    alignItems: 'center',
+    marginVertical: spacing['2xl'],
+  },
+  successIcon: {
+    fontSize: 48,
+    marginBottom: spacing.md,
+  },
+  successTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
+    color: colors.champagneGold,
+    marginBottom: spacing.sm,
+  },
+  successText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray400,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
   },
   actionsContainer: {
     marginBottom: spacing.xl,
   },
-  signButton: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    ...shadows.glow,
+  secondaryActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.xl,
   },
-  signGradient: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  signText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-  },
-  continueButton: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    marginBottom: spacing.md,
-    ...shadows.md,
-  },
-  continueGradient: {
-    paddingVertical: spacing.lg,
-    alignItems: 'center',
-  },
-  continueText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.white,
-  },
-  shareButton: {
+  secondaryButton: {
     paddingVertical: spacing.md,
-    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  shareText: {
+  secondaryButtonText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.champagneGold,

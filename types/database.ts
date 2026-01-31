@@ -377,3 +377,47 @@ export interface ChatTokenMetadata {
     limitingBelief?: string;
   };
 }
+
+// Five Whys types
+export type FiveWhysSession = {
+  id: string;
+  user_id: string;
+  dream_id: string | null;
+  status: 'in_progress' | 'completed' | 'abandoned';
+  current_why_number: number;
+  root_motivation: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+};
+
+export type FiveWhysResponse = {
+  id: string;
+  session_id: string;
+  why_number: number;
+  question: string;
+  user_response: string;
+  gabby_reflection: string | null;
+  created_at: string | null;
+};
+
+// Permission Slip types
+export type PermissionSlipVisualStyle = 'minimalist' | 'floral' | 'modern';
+
+export type PermissionSlip = {
+  id: string;
+  user_id: string;
+  session_id: string | null;
+  dream_id: string | null;
+  permission_statement: string;
+  visual_style: PermissionSlipVisualStyle;
+  signature_data: string | null;
+  signed_at: string | null;
+  share_image_url: string | null;
+  created_at: string | null;
+};
+
+// Extended proof type with permission slip
+export type ExtendedProof = DbProof & {
+  proof_type?: 'action' | 'permission_slip' | 'milestone';
+  permission_slip_id?: string | null;
+};

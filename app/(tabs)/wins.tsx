@@ -19,8 +19,12 @@ import { DreamMap } from '@/components/DreamMap';
 import { ProofWallMasonry } from '@/components/ProofWallMasonry';
 import { useProofs, useDreamProgress } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
+import { usePermissionSlips } from '@/hooks/usePermissionSlips';
 import { ProofEntry } from '@/types';
 import { Badge } from '@/components/ui/Badge';
+import { PermissionSlipCard } from '@/components/PermissionSlipCard';
+import { DigitalPermissionSlip } from '@/components/DigitalPermissionSlip';
+import { PermissionSlip, PermissionSlipVisualStyle } from '@/types/database';
 
 // Milestone badges
 const milestones = [
@@ -39,9 +43,11 @@ export default function WinsScreen() {
   const { proofs } = useProofs();
   const { progress } = useDreamProgress();
   const { isPremium } = useSubscription();
+  const { permissionSlips } = usePermissionSlips();
 
   const [selectedProof, setSelectedProof] = useState<ProofEntry | null>(null);
   const [showProofWall, setShowProofWall] = useState(false);
+  const [selectedPermissionSlip, setSelectedPermissionSlip] = useState<PermissionSlip | null>(null);
 
   const completedCount = progress?.completedActions || 0;
   const dreamProgress = Math.min((completedCount / 50) * 100, 100) / 100; // Progress to 50 actions
@@ -216,6 +222,36 @@ export default function WinsScreen() {
             </TouchableOpacity>
           )}
         </Animated.View>
+
+        {/* Permission Slips Section */}
+        {permissionSlips.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(420)} style={styles.permissionSlipsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Permission Slips</Text>
+              <View style={styles.permissionSlipBadge}>
+                <Text style={styles.permissionSlipBadgeText}>{permissionSlips.length}</Text>
+              </View>
+            </View>
+            <Text style={styles.permissionSlipSubtitle}>
+              Your commitments to yourself
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.permissionSlipsScroll}
+            >
+              {permissionSlips.slice(0, 5).map((slip, index) => (
+                <View key={slip.id} style={styles.permissionSlipItem}>
+                  <PermissionSlipCard
+                    slip={slip}
+                    compact
+                    onPress={() => setSelectedPermissionSlip(slip)}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        )}
 
         {/* Community Section */}
         <Animated.View entering={FadeInDown.delay(450)} style={styles.communitySection}>
@@ -395,6 +431,42 @@ export default function WinsScreen() {
                 onPress={() => setSelectedProof(null)}
               >
                 <Text style={styles.proofDetailCloseText}>✕</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
+        </BlurView>
+      </Modal>
+
+      {/* Permission Slip Detail Modal */}
+      <Modal
+        visible={!!selectedPermissionSlip}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedPermissionSlip(null)}
+      >
+        <BlurView intensity={90} tint="dark" style={styles.proofDetailOverlay}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSelectedPermissionSlip(null)}
+            activeOpacity={1}
+          />
+          {selectedPermissionSlip && (
+            <Animated.View
+              entering={FadeInUp.springify().damping(15)}
+              style={[styles.permissionSlipModal, { marginBottom: insets.bottom + spacing.xl }]}
+            >
+              <DigitalPermissionSlip
+                permissionStatement={selectedPermissionSlip.permission_statement}
+                visualStyle={(selectedPermissionSlip.visual_style || 'minimalist') as PermissionSlipVisualStyle}
+                signatureData={selectedPermissionSlip.signature_data}
+                signedAt={selectedPermissionSlip.signed_at}
+                animated={false}
+              />
+              <TouchableOpacity
+                style={styles.permissionSlipModalClose}
+                onPress={() => setSelectedPermissionSlip(null)}
+              >
+                <Text style={styles.permissionSlipModalCloseText}>✕</Text>
               </TouchableOpacity>
             </Animated.View>
           )}
@@ -807,5 +879,58 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: 24,
     color: colors.gray400,
+  },
+  // Permission Slips Section Styles
+  permissionSlipsSection: {
+    marginBottom: spacing['2xl'],
+  },
+  permissionSlipSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginBottom: spacing.lg,
+  },
+  permissionSlipBadge: {
+    backgroundColor: colors.champagneGold,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    marginLeft: spacing.sm,
+  },
+  permissionSlipBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.midnightNavy,
+  },
+  permissionSlipsScroll: {
+    paddingRight: spacing.lg,
+  },
+  permissionSlipItem: {
+    width: 280,
+    marginRight: spacing.md,
+  },
+  // Permission Slip Modal Styles
+  permissionSlipModal: {
+    width: '100%',
+    maxWidth: 400,
+    padding: spacing.md,
+    position: 'relative',
+  },
+  permissionSlipModalClose: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  permissionSlipModalCloseText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
