@@ -480,6 +480,19 @@ export default function DatabaseStatusScreen() {
         <Animated.View entering={FadeInDown.delay(100)}>
           <Card style={styles.detailsCard}>
             <Text style={styles.sectionTitle}>Connection Details</Text>
+
+            {/* Database Reference ID - Highlighted */}
+            <View style={styles.projectRefContainer}>
+              <Text style={styles.projectRefLabel}>Database Reference ID</Text>
+              <View style={styles.projectRefBadge}>
+                <Text style={styles.projectRefValue}>
+                  {status.connectionDetails.url
+                    ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
+                    : 'Not configured'}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Supabase URL:</Text>
               <Text style={styles.detailValue} numberOfLines={1}>
@@ -495,8 +508,13 @@ export default function DatabaseStatusScreen() {
               </Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Project:</Text>
-              <Text style={styles.detailValue}>fnxunhuwkxueydyioqwp</Text>
+              <Text style={styles.detailLabel}>Status:</Text>
+              <Text style={[
+                styles.detailValue,
+                { color: allSuccess ? colors.vibrantTeal : colors.champagneGold }
+              ]}>
+                {allSuccess ? '✓ Connected to Personal DB' : handshakeComplete ? '⚠ Check Required' : 'Verifying...'}
+              </Text>
             </View>
           </Card>
         </Animated.View>
@@ -854,6 +872,35 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
     marginBottom: spacing.md,
+  },
+  projectRefContainer: {
+    backgroundColor: colors.midnightNavy + '08',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+  },
+  projectRefLabel: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray600,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  projectRefBadge: {
+    backgroundColor: colors.vibrantTeal + '15',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.vibrantTeal + '30',
+  },
+  projectRefValue: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.lg,
+    color: colors.vibrantTeal,
+    letterSpacing: 0.5,
   },
   detailRow: {
     flexDirection: 'row',
