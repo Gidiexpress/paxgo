@@ -66,8 +66,9 @@ export default function CreateAccountScreen() {
     });
 
     // Small delay to show the snackbar before navigating
+    // Navigate to processing-path for the seamless transition experience
     setTimeout(() => {
-      router.replace('/(tabs)');
+      router.replace('/journey/processing-path');
     }, 300);
   }, [isNavigating, router, showSuccess]);
 

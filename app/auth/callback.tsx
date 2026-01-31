@@ -7,7 +7,7 @@ export default function Callback() {
   return (
     <AuthCallbackPage
       supabaseClient={supabase}
-      onSuccess={() => router.replace('/journey/first-dialogue')}
+      onSuccess={() => router.replace('/journey/processing-path')}
       onError={(error) =>
         router.replace(
           `/journey/create-account?error=${encodeURIComponent(error.message)}`

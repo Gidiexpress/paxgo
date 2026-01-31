@@ -1,0 +1,1022 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  SlideInUp,
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withSpring,
+  interpolateColor,
+  Easing,
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@fastshot/auth';
+import { useTextGeneration } from '@fastshot/ai';
+import { supabase } from '@/lib/supabase';
+import { useSnackbar } from '@/contexts/SnackbarContext';
+import {
+  colors,
+  typography,
+  borderRadius,
+  spacing,
+  shadows,
+} from '@/constants/theme';
+import { FiveWhysResponse } from '@/types/database';
+import {
+  generateFiveWhysQuestion,
+  saveFiveWhysResponse,
+  completeFiveWhysSession,
+  generateRootMotivation,
+} from '@/services/fiveWhysService';
+
+interface Message {
+  id: string;
+  role: 'assistant' | 'user';
+  content: string;
+  whyNumber?: number;
+  isGabbyGreeting?: boolean;
+}
+
+interface OnboardingData {
+  name: string;
+  stuckPoint: string;
+  stuckPointTitle: string;
+  dream: string;
+}
+
+// Color palette for ambient glow based on progress
+const PROGRESS_COLORS = {
+  1: { primary: colors.vibrantTeal, secondary: '#1A8A82' }, // Deep teal
+  2: { primary: '#2EB5A8', secondary: '#228B7E' },
+  3: { primary: '#48C9B0', secondary: colors.champagneGold },
+  4: { primary: '#7DD3C4', secondary: '#C4A747' },
+  5: { primary: colors.champagneGold, secondary: '#B8952D' }, // Golden
+};
+
+export default function FiveWhysChatScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const { user } = useAuth();
+  const { showSuccess, showInfo, showError } = useSnackbar();
+  const { generateText, isLoading: isAILoading } = useTextGeneration();
+
+  // State
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [currentWhyNumber, setCurrentWhyNumber] = useState(0);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
+  const [responses, setResponses] = useState<FiveWhysResponse[]>([]);
+  const [isComplete, setIsComplete] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isSending, setIsSending] = useState(false);
+  const [rootMotivation, setRootMotivation] = useState<string | null>(null);
+
+  // Animation values
+  const ambientGlowProgress = useSharedValue(0);
+  const orbPulse = useSharedValue(1);
+  const progressGlow = useSharedValue(0);
+  const dotScale1 = useSharedValue(1);
+  const dotScale2 = useSharedValue(1);
+  const dotScale3 = useSharedValue(1);
+
+  // Start ambient animations
+  useEffect(() => {
+    orbPulse.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+
+    progressGlow.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.5, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  // Update ambient glow based on progress
+  useEffect(() => {
+    ambientGlowProgress.value = withSpring(currentWhyNumber / 5, {
+      damping: 15,
+      stiffness: 80,
+    });
+  }, [currentWhyNumber]);
+
+  // Typing indicator animation
+  useEffect(() => {
+    if (isSending || isAILoading) {
+      dotScale1.value = withRepeat(
+        withSequence(
+          withTiming(1.4, { duration: 300 }),
+          withTiming(1, { duration: 300 })
+        ),
+        -1,
+        false
+      );
+      setTimeout(() => {
+        dotScale2.value = withRepeat(
+          withSequence(
+            withTiming(1.4, { duration: 300 }),
+            withTiming(1, { duration: 300 })
+          ),
+          -1,
+          false
+        );
+      }, 150);
+      setTimeout(() => {
+        dotScale3.value = withRepeat(
+          withSequence(
+            withTiming(1.4, { duration: 300 }),
+            withTiming(1, { duration: 300 })
+          ),
+          -1,
+          false
+        );
+      }, 300);
+    }
+  }, [isSending, isAILoading]);
+
+  // Load onboarding data and initialize
+  useEffect(() => {
+    initializeChat();
+  }, []);
+
+  const initializeChat = async () => {
+    try {
+      // Load onboarding data from AsyncStorage
+      const [stuckPointStr, dreamStr, userDataStr, storedSessionId] = await Promise.all([
+        AsyncStorage.getItem('@boldmove_stuck_point'),
+        AsyncStorage.getItem('@boldmove_dream'),
+        AsyncStorage.getItem('@boldmove_user'),
+        AsyncStorage.getItem('@boldmove_current_session'),
+      ]);
+
+      const stuckPoint = stuckPointStr ? JSON.parse(stuckPointStr) : null;
+      const dream = dreamStr || '';
+      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+
+      const onboarding: OnboardingData = {
+        name: userData?.name || user?.email?.split('@')[0] || 'Bold Explorer',
+        stuckPoint: stuckPoint?.id || 'personal-freedom',
+        stuckPointTitle: stuckPoint?.title || 'personal growth',
+        dream: dream || 'achieving your dream',
+      };
+
+      setOnboardingData(onboarding);
+
+      // Use stored session or create new one
+      let activeSessionId = storedSessionId;
+      if (!activeSessionId && user?.id) {
+        // Create new session
+        const { data: session, error } = await supabase
+          .from('five_whys_sessions')
+          .insert({
+            user_id: user.id,
+            status: 'in_progress',
+            current_why_number: 0,
+          })
+          .select()
+          .single();
+
+        if (session) {
+          activeSessionId = session.id;
+          await AsyncStorage.setItem('@boldmove_current_session', session.id);
+        }
+      }
+
+      setSessionId(activeSessionId);
+
+      // Generate personalized greeting from Gabby
+      await generatePersonalizedGreeting(onboarding);
+    } catch (error) {
+      console.error('Failed to initialize chat:', error);
+      // Fallback initialization
+      setOnboardingData({
+        name: 'Bold Explorer',
+        stuckPoint: 'personal-freedom',
+        stuckPointTitle: 'personal growth',
+        dream: 'your dream',
+      });
+      generateFallbackGreeting();
+    }
+  };
+
+  const generatePersonalizedGreeting = async (onboarding: OnboardingData) => {
+    try {
+      const prompt = `You are Gabby, a warm and sophisticated mindset coach. You're about to guide ${onboarding.name} through the "Five Whys" technique to uncover their deepest motivation.
+
+IMPORTANT CONTEXT - The user has already shared during onboarding:
+- Their name: ${onboarding.name}
+- Their area of focus: ${onboarding.stuckPointTitle}
+- Their dream: "${onboarding.dream}"
+
+Generate a warm, personalized opening message that:
+1. Greets them by name warmly (not generic)
+2. Explicitly acknowledges their specific dream ("${onboarding.dream}")
+3. Shows you remember their focus area (${onboarding.stuckPointTitle})
+4. Briefly explains you'll explore 5 layers of "why" together
+5. Asks the FIRST "Why" question: Why does this dream matter to them?
+
+TONE: Sophisticated yet warm, like a wise friend. NOT robotic or generic.
+LENGTH: 3-4 sentences max. End with the question.
+
+DO NOT ask them to share their dream or goals - you already know them!`;
+
+      const response = await generateText(prompt);
+
+      if (response) {
+        setMessages([
+          {
+            id: '1',
+            role: 'assistant',
+            content: response,
+            whyNumber: 1,
+            isGabbyGreeting: true,
+          },
+        ]);
+        setCurrentWhyNumber(1);
+      } else {
+        generateFallbackGreeting();
+      }
+    } catch (error) {
+      console.error('Failed to generate greeting:', error);
+      generateFallbackGreeting();
+    } finally {
+      setIsInitializing(false);
+    }
+  };
+
+  const generateFallbackGreeting = () => {
+    const name = onboardingData?.name || 'there';
+    const dream = onboardingData?.dream || 'your dream';
+
+    setMessages([
+      {
+        id: '1',
+        role: 'assistant',
+        content: `Hi ${name}! I'm Gabby, and I'm so glad you're here. I can see you're working toward "${dream}" - that's beautiful. Let's explore the deeper "why" behind this dream together.\n\nI'll ask you five questions, each going deeper than the last. By the end, you'll have uncovered something powerful about yourself.\n\nSo tell me - why does this dream matter to you?`,
+        whyNumber: 1,
+        isGabbyGreeting: true,
+      },
+    ]);
+    setCurrentWhyNumber(1);
+    setIsInitializing(false);
+  };
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
+  };
+
+  const handleSend = async () => {
+    if (!inputText.trim() || isSending || isAILoading) return;
+
+    const userMessage = inputText.trim();
+    setInputText('');
+    setIsSending(true);
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    // Add user message
+    const userMsgId = Date.now().toString();
+    const newUserMessage: Message = {
+      id: userMsgId,
+      role: 'user',
+      content: userMessage,
+    };
+
+    setMessages((prev) => [...prev, newUserMessage]);
+    scrollToBottom();
+
+    try {
+      // Save response to database
+      if (sessionId && user?.id) {
+        const lastAssistantMsg = messages.filter(m => m.role === 'assistant').pop();
+        const question = lastAssistantMsg?.content || '';
+        const gabbyReflection = '';
+
+        const savedResponse = await saveFiveWhysResponse(
+          sessionId,
+          currentWhyNumber,
+          question,
+          userMessage,
+          gabbyReflection
+        );
+
+        if (savedResponse) {
+          setResponses((prev) => [...prev, savedResponse]);
+        }
+      }
+
+      const nextWhyNumber = currentWhyNumber + 1;
+
+      if (nextWhyNumber <= 5) {
+        // Generate next question
+        const allResponses = [...responses, {
+          id: userMsgId,
+          session_id: sessionId || '',
+          why_number: currentWhyNumber,
+          question: messages.filter(m => m.role === 'assistant').pop()?.content || '',
+          user_response: userMessage,
+          gabby_reflection: null,
+          created_at: new Date().toISOString(),
+        }];
+
+        const result = await generateFiveWhysQuestion(
+          onboardingData?.dream || 'their dream',
+          nextWhyNumber,
+          allResponses as FiveWhysResponse[],
+          onboardingData?.name
+        );
+
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: result.gabbyReflection ? `${result.gabbyReflection}\n\n${result.question}` : result.question,
+          whyNumber: nextWhyNumber,
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+        setCurrentWhyNumber(nextWhyNumber);
+
+        // Show milestone snackbar at certain points
+        if (nextWhyNumber === 3) {
+          showInfo('You\'re going deeper - beautiful insights emerging', {
+            icon: '✨',
+            duration: 3000,
+          });
+        }
+      } else {
+        // Five Whys complete - generate root motivation
+        await handleFiveWhysComplete(userMessage);
+      }
+    } catch (error) {
+      console.error('Failed to process message:', error);
+      showError('Something went wrong. Please try again.');
+    } finally {
+      setIsSending(false);
+      scrollToBottom();
+    }
+  };
+
+  const handleFiveWhysComplete = async (finalResponse: string) => {
+    try {
+      // Generate root motivation
+      const allResponses = [...responses, {
+        id: Date.now().toString(),
+        session_id: sessionId || '',
+        why_number: 5,
+        question: messages.filter(m => m.role === 'assistant').pop()?.content || '',
+        user_response: finalResponse,
+        gabby_reflection: null,
+        created_at: new Date().toISOString(),
+      }];
+
+      const motivation = await generateRootMotivation(
+        onboardingData?.dream || 'their dream',
+        allResponses as FiveWhysResponse[]
+      );
+
+      setRootMotivation(motivation);
+
+      // Save session completion
+      if (sessionId) {
+        await completeFiveWhysSession(sessionId, motivation);
+      }
+
+      // Update user's onboarding status
+      if (user?.id) {
+        await supabase
+          .from('users')
+          .update({ onboarding_completed: true })
+          .eq('id', user.id);
+
+        // Update dream with core motivation
+        await supabase
+          .from('dreams')
+          .update({
+            core_motivation: motivation,
+            five_whys_completed: true,
+          })
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+      }
+
+      // Generate synthesis message
+      const synthesisPrompt = `You are Gabby. You've just completed a profound Five Whys journey with ${onboardingData?.name || 'someone'}.
+
+Their dream: "${onboardingData?.dream || 'their dream'}"
+Their root motivation you've uncovered: "${motivation}"
+
+Write a powerful, celebratory synthesis (3-4 sentences max) that:
+1. Celebrates this breakthrough moment
+2. Reflects back their root motivation in an affirming way
+3. Makes them feel seen and understood
+4. Sets up excitement for what comes next (their personalized roadmap)
+
+Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journey.`;
+
+      const synthesis = await generateText(synthesisPrompt);
+
+      const synthesisMessage: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: synthesis || `✨ Wow, ${onboardingData?.name || 'friend'}! What a journey we've taken together.\n\n"${motivation}"\n\nThis is your truth - the fire beneath your dream. Now let's turn this beautiful insight into your Golden Path of action.`,
+      };
+
+      setMessages((prev) => [...prev, synthesisMessage]);
+      setIsComplete(true);
+
+      // Haptic celebration
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Premium success snackbar
+      showSuccess('Core Insight Unlocked: Your Golden Path is forming', {
+        icon: '✨',
+        duration: 4000,
+      });
+    } catch (error) {
+      console.error('Failed to complete Five Whys:', error);
+      setIsComplete(true);
+      setRootMotivation('Your dream connects to something deep within you.');
+    }
+  };
+
+  const handleContinue = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      // Store data for reference
+      await AsyncStorage.setItem('@boldmove_root_motivation', rootMotivation || '');
+      await AsyncStorage.setItem('@boldmove_onboarding_complete', 'true');
+
+      // Navigate to roadmap with params - the roadmap page will generate the roadmap
+      router.replace({
+        pathname: '/roadmap',
+        params: {
+          dream: onboardingData?.dream || 'your dream',
+          rootMotivation: rootMotivation || '',
+        },
+      });
+    } catch (error) {
+      console.error('Failed to navigate to roadmap:', error);
+      router.replace('/(tabs)');
+    }
+  };
+
+  // Animated styles
+  const ambientGlowStyle = useAnimatedStyle(() => {
+    const backgroundColor = interpolateColor(
+      ambientGlowProgress.value,
+      [0, 0.5, 1],
+      [colors.vibrantTeal, '#48C9B0', colors.champagneGold]
+    );
+
+    return {
+      backgroundColor,
+      opacity: 0.15,
+    };
+  });
+
+  const orbStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: orbPulse.value }],
+  }));
+
+  const progressGlowStyle = useAnimatedStyle(() => ({
+    opacity: progressGlow.value,
+  }));
+
+  const dot1Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale1.value }],
+  }));
+  const dot2Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale2.value }],
+  }));
+  const dot3Style = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale3.value }],
+  }));
+
+  // Get current progress color
+  const getCurrentColor = () => {
+    const colorKey = Math.min(currentWhyNumber, 5) as keyof typeof PROGRESS_COLORS;
+    return PROGRESS_COLORS[colorKey] || PROGRESS_COLORS[1];
+  };
+
+  const renderProgressIndicator = () => {
+    const currentColor = getCurrentColor();
+
+    return (
+      <Animated.View entering={FadeInDown.delay(100)} style={styles.progressSection}>
+        <View style={styles.progressHeader}>
+          <View style={styles.progressInfo}>
+            <Text style={styles.progressTitle}>The Five Whys</Text>
+            <Text style={styles.progressSubtitle}>
+              {isComplete ? 'Journey Complete ✨' : `Discovering Why #${currentWhyNumber}`}
+            </Text>
+          </View>
+
+          {/* Mini orb indicator */}
+          <Animated.View style={[styles.miniOrb, orbStyle]}>
+            <LinearGradient
+              colors={[currentColor.primary, currentColor.secondary]}
+              style={styles.miniOrbGradient}
+            />
+          </Animated.View>
+        </View>
+
+        {/* Progress bar */}
+        <View style={styles.progressBar}>
+          {[1, 2, 3, 4, 5].map((num) => (
+            <View key={num} style={styles.progressSegmentContainer}>
+              <View
+                style={[
+                  styles.progressSegment,
+                  num <= currentWhyNumber && {
+                    backgroundColor: getCurrentColor().primary,
+                  },
+                  num === currentWhyNumber && styles.progressSegmentActive,
+                ]}
+              />
+              {num === currentWhyNumber && !isComplete && (
+                <Animated.View
+                  style={[
+                    styles.progressSegmentGlow,
+                    progressGlowStyle,
+                    { backgroundColor: currentColor.primary },
+                  ]}
+                />
+              )}
+            </View>
+          ))}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderMessage = (message: Message, index: number) => {
+    const isAssistant = message.role === 'assistant';
+
+    return (
+      <Animated.View
+        key={message.id}
+        entering={isAssistant ? FadeInLeft.delay(100) : FadeInRight.delay(100)}
+        style={[
+          styles.messageContainer,
+          isAssistant ? styles.assistantMessage : styles.userMessage,
+        ]}
+      >
+        {isAssistant && (
+          <View style={styles.avatarContainer}>
+            <LinearGradient
+              colors={[colors.champagneGold, colors.goldDark]}
+              style={styles.avatar}
+            >
+              <Text style={styles.avatarText}>G</Text>
+            </LinearGradient>
+          </View>
+        )}
+        <View
+          style={[
+            styles.messageBubble,
+            isAssistant ? styles.assistantBubble : styles.userBubble,
+          ]}
+        >
+          <Text
+            style={[
+              styles.messageText,
+              isAssistant ? styles.assistantText : styles.userText,
+            ]}
+          >
+            {message.content}
+          </Text>
+          {message.whyNumber && !isComplete && (
+            <View style={[styles.whyBadge, { backgroundColor: `${getCurrentColor().primary}20` }]}>
+              <Text style={[styles.whyBadgeText, { color: getCurrentColor().primary }]}>
+                Why #{message.whyNumber}
+              </Text>
+            </View>
+          )}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderTypingIndicator = () => (
+    <Animated.View
+      entering={FadeInLeft}
+      style={[styles.messageContainer, styles.assistantMessage]}
+    >
+      <View style={styles.avatarContainer}>
+        <LinearGradient
+          colors={[colors.champagneGold, colors.goldDark]}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarText}>G</Text>
+        </LinearGradient>
+      </View>
+      <View style={[styles.messageBubble, styles.assistantBubble, styles.typingBubble]}>
+        <View style={styles.typingDots}>
+          <Animated.View style={[styles.typingDot, dot1Style]} />
+          <Animated.View style={[styles.typingDot, dot2Style]} />
+          <Animated.View style={[styles.typingDot, dot3Style]} />
+        </View>
+      </View>
+    </Animated.View>
+  );
+
+  if (isInitializing) {
+    return (
+      <View style={[styles.loadingContainer, { paddingTop: insets.top }]}>
+        <LinearGradient
+          colors={[colors.parchmentWhite, colors.warmCream]}
+          style={StyleSheet.absoluteFill}
+        />
+        <ActivityIndicator size="large" color={colors.vibrantTeal} />
+        <Text style={styles.loadingText}>Gabby is preparing your journey...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Ambient glow background */}
+      <Animated.View style={[styles.ambientGlow, ambientGlowStyle]} />
+
+      {/* Base background */}
+      <LinearGradient
+        colors={[colors.parchmentWhite, colors.warmCream]}
+        style={[StyleSheet.absoluteFill, { opacity: 0.9 }]}
+      />
+
+      {/* Progress indicator */}
+      {renderProgressIndicator()}
+
+      {/* Chat area */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.chatContainer}
+        keyboardVerticalOffset={insets.top + 120}
+      >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.messagesContainer}
+          contentContainerStyle={styles.messagesContent}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={scrollToBottom}
+        >
+          {messages.map((message, index) => renderMessage(message, index))}
+          {(isSending || isAILoading) && renderTypingIndicator()}
+        </ScrollView>
+
+        {/* Input or Continue */}
+        {isComplete ? (
+          <Animated.View
+            entering={SlideInUp}
+            style={[styles.completeContainer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}
+          >
+            <View style={styles.insightCard}>
+              <Text style={styles.insightLabel}>Your Core Insight</Text>
+              <Text style={styles.insightText}>{rootMotivation}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+              <LinearGradient
+                colors={[colors.champagneGold, colors.goldDark]}
+                style={styles.continueGradient}
+              >
+                <Text style={styles.continueText}>See My Golden Path</Text>
+                <Text style={styles.continueArrow}>→</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        ) : (
+          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+            <TextInput
+              style={styles.input}
+              placeholder="Share your thoughts..."
+              placeholderTextColor={colors.gray400}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
+              editable={!isSending && !isAILoading}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!inputText.trim() || isSending || isAILoading) && styles.sendButtonDisabled,
+              ]}
+              onPress={handleSend}
+              disabled={!inputText.trim() || isSending || isAILoading}
+            >
+              <LinearGradient
+                colors={
+                  inputText.trim() && !isSending && !isAILoading
+                    ? [getCurrentColor().primary, getCurrentColor().secondary]
+                    : [colors.gray300, colors.gray400]
+                }
+                style={styles.sendGradient}
+              >
+                <Text style={styles.sendText}>↑</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.parchmentWhite,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.parchmentWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.gray500,
+    marginTop: spacing.lg,
+  },
+  ambientGlow: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.15,
+  },
+  progressSection: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray200,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  progressInfo: {
+    flex: 1,
+  },
+  progressTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
+    color: colors.midnightNavy,
+  },
+  progressSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginTop: 2,
+  },
+  miniOrb: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+    ...shadows.glow,
+  },
+  miniOrbGradient: {
+    width: '100%',
+    height: '100%',
+  },
+  progressBar: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  progressSegmentContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  progressSegment: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray300,
+  },
+  progressSegmentActive: {
+    transform: [{ scaleY: 1.2 }],
+  },
+  progressSegmentGlow: {
+    position: 'absolute',
+    top: -2,
+    left: 0,
+    right: 0,
+    height: 8,
+    borderRadius: 4,
+    opacity: 0.4,
+  },
+  chatContainer: {
+    flex: 1,
+  },
+  messagesContainer: {
+    flex: 1,
+  },
+  messagesContent: {
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  messageContainer: {
+    flexDirection: 'row',
+    marginBottom: spacing.lg,
+    alignItems: 'flex-end',
+  },
+  assistantMessage: {
+    justifyContent: 'flex-start',
+  },
+  userMessage: {
+    justifyContent: 'flex-end',
+  },
+  avatarContainer: {
+    marginRight: spacing.sm,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
+  },
+  avatarText: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.lg,
+    color: colors.midnightNavy,
+  },
+  messageBubble: {
+    maxWidth: '78%',
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  assistantBubble: {
+    backgroundColor: colors.white,
+    borderBottomLeftRadius: borderRadius.sm,
+  },
+  userBubble: {
+    backgroundColor: colors.midnightNavy,
+    borderBottomRightRadius: borderRadius.sm,
+  },
+  typingBubble: {
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
+  messageText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    lineHeight: 24,
+  },
+  assistantText: {
+    color: colors.midnightNavy,
+  },
+  userText: {
+    color: colors.white,
+  },
+  whyBadge: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+  },
+  whyBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+  },
+  typingDots: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  typingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.gray400,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: spacing.md,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    backgroundColor: colors.parchmentWhite,
+    gap: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+    maxHeight: 100,
+    ...shadows.sm,
+  },
+  sendButton: {
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+  },
+  sendButtonDisabled: {
+    opacity: 0.7,
+  },
+  sendGradient: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendText: {
+    fontSize: 20,
+    color: colors.white,
+    fontWeight: 'bold',
+  },
+  completeContainer: {
+    padding: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    backgroundColor: colors.warmCream,
+  },
+  insightCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    ...shadows.md,
+    borderWidth: 1,
+    borderColor: `${colors.champagneGold}40`,
+  },
+  insightLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.champagneGold,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  insightText: {
+    fontFamily: typography.fontFamily.headingItalic,
+    fontSize: typography.fontSize.lg,
+    color: colors.midnightNavy,
+    lineHeight: 28,
+  },
+  continueButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+    shadowColor: colors.champagneGold,
+    shadowOpacity: 0.3,
+  },
+  continueGradient: {
+    flexDirection: 'row',
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  continueText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+  },
+  continueArrow: {
+    fontSize: 18,
+    color: colors.midnightNavy,
+    fontWeight: 'bold',
+  },
+});
