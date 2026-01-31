@@ -821,3 +821,271 @@ Respond with a single JSON object (not an array):
     };
   }
 }
+
+// ============================================
+// DYNAMIC ACTION ROADMAP - Phase 3
+// ============================================
+
+// Roadmap action data structure
+export interface RoadmapActionData {
+  title: string;
+  description: string;
+  why_it_matters: string;
+  duration_minutes: number;
+  gabby_tip: string;
+  category: 'research' | 'planning' | 'action' | 'reflection' | 'connection';
+  order_index: number;
+}
+
+// Roadmap generation response
+export interface RoadmapGenerationResponse {
+  success: boolean;
+  roadmap_title?: string;
+  actions?: RoadmapActionData[];
+  error?: string;
+}
+
+// Prompt for generating strategic roadmap actions
+const ROADMAP_GENERATION_PROMPT = `You are Gabby, a luxury life architect who transforms big dreams into elegant, achievable paths. You create "Golden Path" roadmaps—strategic sequences of micro-actions that feel like stepping stones across a beautiful garden, not a mountain to climb.
+
+YOUR TASK: Generate 3-5 strategic micro-actions that form a cohesive path from where the user is NOW to meaningful progress toward their dream.
+
+ROADMAP PHILOSOPHY:
+- Each action should build on the previous one, creating momentum
+- Actions should alternate between internal work (reflection, planning) and external action
+- The path should feel luxurious and intentional, never overwhelming
+- Link EVERY action back to the user's deep motivation (their "why")
+
+ACTION REQUIREMENTS:
+For each action, provide:
+1. "title": An elegant, evocative title (5-8 words max) that sounds like an invitation, not a task
+2. "description": Clear, specific instructions (2-3 sentences) on exactly what to do
+3. "why_it_matters": A personal snippet (1-2 sentences) that connects THIS specific action to their ROOT MOTIVATION. Start with phrases like "Because you want...", "This brings you closer to...", "For someone who values..."
+4. "duration_minutes": Realistic time (5-15 minutes each)
+5. "gabby_tip": Specific, graceful advice on HOW to execute this with elegance. Include a concrete technique, mindset shift, or environmental suggestion.
+6. "category": One of [research, planning, action, reflection, connection]
+7. "order_index": Sequential number starting from 0
+
+NAMING STYLE (luxurious, not corporate):
+✓ "Craft your vision board moment"
+✗ "Create a vision board"
+✓ "Discover one kindred spirit"
+✗ "Find a mentor"
+✓ "Map your first bold conversation"
+✗ "Plan a meeting"
+
+RESPOND AS JSON:
+{
+  "roadmap_title": "A poetic 4-6 word title for this entire roadmap journey",
+  "actions": [
+    {
+      "title": "...",
+      "description": "...",
+      "why_it_matters": "...",
+      "duration_minutes": 10,
+      "gabby_tip": "...",
+      "category": "reflection",
+      "order_index": 0
+    }
+  ]
+}`;
+
+// Generate a complete roadmap of strategic micro-actions
+export async function generateRoadmapActions(
+  dream: string,
+  rootMotivation?: string
+): Promise<RoadmapGenerationResponse> {
+  try {
+    const motivationContext = rootMotivation
+      ? `\n\nUSER'S ROOT MOTIVATION (from their Five Whys journey):\n"${rootMotivation}"\n\nThis is their DEEP WHY. Every "why_it_matters" must connect back to this core desire.`
+      : '\n\nNo specific root motivation provided. Focus on universal themes of growth, freedom, and self-actualization.';
+
+    const prompt = `${ROADMAP_GENERATION_PROMPT}
+${motivationContext}
+
+USER'S BIG DREAM:
+"${dream}"
+
+Generate a Golden Path roadmap with 3-5 strategic micro-actions. Respond ONLY with valid JSON:`;
+
+    const response = await generateText({ prompt });
+
+    // Parse JSON from response
+    const jsonMatch = response?.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const data = JSON.parse(jsonMatch[0]);
+      return {
+        success: true,
+        roadmap_title: data.roadmap_title || 'Your Golden Path',
+        actions: data.actions || [],
+      };
+    }
+
+    // Elegant fallback roadmap
+    return {
+      success: true,
+      roadmap_title: 'Your First Bold Steps',
+      actions: [
+        {
+          title: 'Create your sacred dreaming space',
+          description: 'Find a quiet corner, light a candle or dim the lights, and spend 5 minutes with your eyes closed, visualizing your dream as if it has already happened.',
+          why_it_matters: rootMotivation
+            ? `Because "${rootMotivation}" — this moment of stillness plants the seed of that desire.`
+            : 'Because every bold journey begins with a moment of clarity and intention.',
+          duration_minutes: 5,
+          gabby_tip: 'Choose a spot that feels special to you. Even a corner of your couch can become sacred with the right intention. Hold something meaningful while you visualize.',
+          category: 'reflection',
+          order_index: 0,
+        },
+        {
+          title: 'Capture one spark of inspiration',
+          description: 'Search for one image, quote, or story that makes your dream feel more real and attainable. Save it somewhere you\'ll see it daily.',
+          why_it_matters: rootMotivation
+            ? `This connects you to others who have walked toward what you want: "${rootMotivation}".`
+            : 'Surrounding yourself with proof of possibility rewires your belief in what\'s achievable.',
+          duration_minutes: 10,
+          gabby_tip: 'Don\'t overthink this. The first thing that makes your heart skip is usually the right choice. Set it as your phone wallpaper for constant gentle reminders.',
+          category: 'research',
+          order_index: 1,
+        },
+        {
+          title: 'Draft your bold declaration',
+          description: 'Write three sentences describing your dream in present tense, as if you are already living it. Begin each with "I am..." or "I have..."',
+          why_it_matters: rootMotivation
+            ? `Writing it down transforms "${rootMotivation}" from a wish into a commitment you\'ve made to yourself.`
+            : 'Present-tense declarations activate your brain\'s pattern recognition to spot opportunities aligned with your vision.',
+          duration_minutes: 10,
+          gabby_tip: 'Write by hand if possible—there\'s magic in the physical act. Read it aloud once. Notice how it feels in your body.',
+          category: 'planning',
+          order_index: 2,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Roadmap generation error:', error);
+    return {
+      success: false,
+      error: 'Unable to generate your roadmap. Please try again.',
+    };
+  }
+}
+
+// Refine/regenerate a single action that feels misaligned
+export interface RefineActionResponse {
+  success: boolean;
+  action?: RoadmapActionData;
+  error?: string;
+}
+
+export async function refineRoadmapAction(
+  currentAction: RoadmapActionData,
+  dream: string,
+  rootMotivation?: string,
+  userFeedback?: string
+): Promise<RefineActionResponse> {
+  try {
+    const feedbackContext = userFeedback
+      ? `\n\nUSER FEEDBACK on why the current action doesn't feel right:\n"${userFeedback}"`
+      : '\n\nThe user feels this action is misaligned but didn\'t specify why. Offer a gentler, more approachable alternative.';
+
+    const motivationContext = rootMotivation
+      ? `\n\nUser's root motivation: "${rootMotivation}"`
+      : '';
+
+    const prompt = `You are Gabby, refining a single micro-action that didn't resonate with the user.
+
+CURRENT ACTION THAT NEEDS REFINEMENT:
+- Title: ${currentAction.title}
+- Description: ${currentAction.description}
+- Category: ${currentAction.category}
+${feedbackContext}
+
+USER'S DREAM: "${dream}"${motivationContext}
+
+Generate ONE replacement action that:
+1. Maintains the same order_index (${currentAction.order_index}) and approximate purpose in the sequence
+2. Feels gentler, more aligned, or addresses the user's concern
+3. Keeps the luxurious, invitation-style naming
+4. Still connects to their root motivation
+
+Respond ONLY with valid JSON for the single action:
+{
+  "title": "...",
+  "description": "...",
+  "why_it_matters": "...",
+  "duration_minutes": 10,
+  "gabby_tip": "...",
+  "category": "${currentAction.category}",
+  "order_index": ${currentAction.order_index}
+}`;
+
+    const response = await generateText({ prompt });
+
+    const jsonMatch = response?.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const action = JSON.parse(jsonMatch[0]) as RoadmapActionData;
+      return {
+        success: true,
+        action,
+      };
+    }
+
+    // Fallback: return a gentler version of the same category
+    return {
+      success: true,
+      action: {
+        title: 'Take one mindful moment',
+        description: 'Pause wherever you are. Take three deep breaths and ask yourself: "What\'s the smallest step I could take right now that would feel good?"',
+        why_it_matters: rootMotivation
+          ? `Because at the heart of "${rootMotivation}" is permission to move at your own pace.`
+          : 'Because progress isn\'t about speed—it\'s about direction. Any step forward counts.',
+        duration_minutes: 5,
+        gabby_tip: 'There\'s no wrong answer here. Trust what comes up. Sometimes the smallest step is simply deciding you\'re ready.',
+        category: currentAction.category,
+        order_index: currentAction.order_index,
+      },
+    };
+  } catch (error) {
+    console.error('Action refinement error:', error);
+    return {
+      success: false,
+      error: 'Unable to refine this action. Please try again.',
+    };
+  }
+}
+
+// Generate a Gabby tip for an existing action (for when we need just the tip)
+export async function generateGabbyTip(
+  actionTitle: string,
+  actionDescription: string,
+  category: string
+): Promise<{ success: boolean; tip?: string; error?: string }> {
+  try {
+    const prompt = `You are Gabby, a sophisticated mindset coach. Generate ONE specific, graceful tip for executing this action with elegance.
+
+ACTION: ${actionTitle}
+DESCRIPTION: ${actionDescription}
+CATEGORY: ${category}
+
+Your tip should:
+- Be 1-2 sentences
+- Include a concrete technique, mindset shift, or environmental suggestion
+- Feel luxurious and supportive, not demanding
+- Help the user execute with grace and intention
+
+Respond with ONLY the tip text, no JSON or formatting:`;
+
+    const response = await generateText({ prompt });
+
+    return {
+      success: true,
+      tip: response || 'Take a deep breath before you begin. You\'ve got this.',
+    };
+  } catch (error) {
+    console.error('Gabby tip generation error:', error);
+    return {
+      success: false,
+      error: 'Unable to generate tip.',
+    };
+  }
+}

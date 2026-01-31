@@ -280,7 +280,23 @@ export function useProofs() {
     [setProofs]
   );
 
-  return { proofs, setProofs, addProof, addReaction, loading };
+  // Get proofs for a specific action
+  const getProofsForAction = useCallback(
+    (actionId: string) => {
+      return proofs.filter((p) => p.actionId === actionId);
+    },
+    [proofs]
+  );
+
+  // Check if an action has any proofs
+  const hasProofForAction = useCallback(
+    (actionId: string) => {
+      return proofs.some((p) => p.actionId === actionId);
+    },
+    [proofs]
+  );
+
+  return { proofs, setProofs, addProof, addReaction, getProofsForAction, hasProofForAction, loading };
 }
 
 // Permission Slips hook

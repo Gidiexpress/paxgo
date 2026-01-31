@@ -11,7 +11,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, FadeInRight } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, spacing, shadows, borderRadius } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
@@ -24,6 +24,7 @@ import { ConfettiAnimation } from '@/components/ConfettiAnimation';
 import { useUser, useActions, useDreamProgress, useDeepDive } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useMicroActions } from '@/hooks/useAI';
+import { useRoadmap } from '@/hooks/useRoadmap';
 import { MicroAction } from '@/types';
 
 export default function ActionScreen() {
@@ -36,6 +37,7 @@ export default function ActionScreen() {
   const { deepDive, hasActiveDeepDive } = useDeepDive();
   const { isPremium } = useSubscription();
   const { actions: aiActions, isLoading: aiLoading, generateActions } = useMicroActions();
+  const { activeRoadmap, activeProgress } = useRoadmap();
 
   const [showConfetti, setShowConfetti] = useState(false);
   const [todayActions, setTodayActions] = useState<MicroAction[]>([]);
@@ -189,6 +191,52 @@ export default function ActionScreen() {
         </Animated.View>
       )}
 
+      {/* Golden Path Roadmap Banner */}
+      {activeRoadmap && (
+        <Animated.View entering={FadeInRight.delay(100)}>
+          <TouchableOpacity
+            style={styles.roadmapBanner}
+            onPress={() => router.push('/roadmap')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={[colors.midnightNavy, colors.navyLight]}
+              style={styles.roadmapBannerGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.roadmapBannerContent}>
+                <View style={styles.roadmapBannerLeft}>
+                  <View style={styles.roadmapIconContainer}>
+                    <Text style={styles.roadmapIcon}>🗺️</Text>
+                  </View>
+                  <View style={styles.roadmapTextContainer}>
+                    <Text style={styles.roadmapBannerTitle}>
+                      {activeRoadmap.roadmap_title}
+                    </Text>
+                    <Text style={styles.roadmapBannerSubtitle}>
+                      {Math.round(activeProgress * 100)}% complete • Tap to continue
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.roadmapArrowContainer}>
+                  <Text style={styles.roadmapArrow}>›</Text>
+                </View>
+              </View>
+              {/* Mini progress bar */}
+              <View style={styles.roadmapProgressBar}>
+                <View
+                  style={[
+                    styles.roadmapProgressFill,
+                    { width: `${activeProgress * 100}%` },
+                  ]}
+                />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
       {/* Active Deep Dive Banner */}
       {hasActiveDeepDive && deepDive && !showDeepDiveModal && (
         <ActiveDeepDiveBanner
@@ -247,6 +295,36 @@ export default function ActionScreen() {
             style={styles.generateButton}
           />
         </Animated.View>
+
+        {/* Create Roadmap CTA */}
+        {!activeRoadmap && user?.dream && (
+          <Animated.View entering={FadeInDown.delay(600)} style={styles.roadmapCTA}>
+            <TouchableOpacity
+              style={styles.roadmapCTACard}
+              onPress={() => router.push({
+                pathname: '/roadmap',
+                params: { dream: user.dream, rootMotivation: '' },
+              })}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[colors.champagneGold + '15', colors.goldLight + '10']}
+                style={styles.roadmapCTAGradient}
+              >
+                <View style={styles.roadmapCTAContent}>
+                  <Text style={styles.roadmapCTAEmoji}>🗺️</Text>
+                  <View style={styles.roadmapCTAText}>
+                    <Text style={styles.roadmapCTATitle}>Create Your Golden Path</Text>
+                    <Text style={styles.roadmapCTASubtitle}>
+                      Transform your dream into a strategic sequence of micro-actions
+                    </Text>
+                  </View>
+                  <Text style={styles.roadmapCTAArrow}>→</Text>
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
         {/* Today's Progress Summary */}
         {completedCount > 0 && (
@@ -450,5 +528,119 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: colors.gray500,
     fontWeight: '300',
+  },
+  // Roadmap Banner styles
+  roadmapBanner: {
+    marginHorizontal: spacing.lg,
+    marginVertical: spacing.sm,
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  roadmapBannerGradient: {
+    padding: spacing.lg,
+  },
+  roadmapBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  roadmapBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  roadmapIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  roadmapIcon: {
+    fontSize: 22,
+  },
+  roadmapTextContainer: {
+    flex: 1,
+  },
+  roadmapBannerTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+    marginBottom: 2,
+  },
+  roadmapBannerSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255,255,255,0.7)',
+  },
+  roadmapArrowContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roadmapArrow: {
+    fontSize: 18,
+    color: colors.white,
+    fontWeight: '300',
+    marginTop: -1,
+  },
+  roadmapProgressBar: {
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  roadmapProgressFill: {
+    height: '100%',
+    backgroundColor: colors.champagneGold,
+    borderRadius: 2,
+  },
+  // Create Roadmap CTA styles
+  roadmapCTA: {
+    marginTop: spacing.xl,
+  },
+  roadmapCTACard: {
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.champagneGold + '40',
+  },
+  roadmapCTAGradient: {
+    padding: spacing.lg,
+  },
+  roadmapCTAContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  roadmapCTAEmoji: {
+    fontSize: 32,
+    marginRight: spacing.md,
+  },
+  roadmapCTAText: {
+    flex: 1,
+  },
+  roadmapCTATitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+    marginBottom: 2,
+  },
+  roadmapCTASubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray600,
+    lineHeight: 20,
+  },
+  roadmapCTAArrow: {
+    fontSize: 20,
+    color: colors.champagneGold,
+    marginLeft: spacing.sm,
   },
 });

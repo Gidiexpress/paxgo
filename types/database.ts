@@ -7,8 +7,54 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.1"
+  }
   public: {
     Tables: {
+      action_roadmaps: {
+        Row: {
+          created_at: string | null
+          dream: string
+          id: string
+          roadmap_title: string
+          root_motivation: string | null
+          status: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dream: string
+          id?: string
+          roadmap_title: string
+          root_motivation?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dream?: string
+          id?: string
+          roadmap_title?: string
+          root_motivation?: string | null
+          status?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_roadmaps_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           content: string
@@ -40,6 +86,85 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "chat_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      five_whys_responses: {
+        Row: {
+          created_at: string | null
+          gabby_reflection: string | null
+          id: string
+          question: string
+          session_id: string
+          user_response: string
+          why_number: number
+        }
+        Insert: {
+          created_at?: string | null
+          gabby_reflection?: string | null
+          id?: string
+          question: string
+          session_id: string
+          user_response: string
+          why_number: number
+        }
+        Update: {
+          created_at?: string | null
+          gabby_reflection?: string | null
+          id?: string
+          question?: string
+          session_id?: string
+          user_response?: string
+          why_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "five_whys_responses_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "five_whys_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      five_whys_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          current_why_number: number
+          dream_id: string | null
+          id: string
+          root_motivation: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_why_number?: number
+          dream_id?: string | null
+          id?: string
+          root_motivation?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          current_why_number?: number
+          dream_id?: string | null
+          id?: string
+          root_motivation?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "five_whys_sessions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -135,6 +260,60 @@ export type Database = {
           },
         ]
       }
+      permission_slips: {
+        Row: {
+          created_at: string | null
+          dream_id: string | null
+          id: string
+          permission_statement: string
+          session_id: string | null
+          share_image_url: string | null
+          signature_data: string | null
+          signed_at: string | null
+          user_id: string
+          visual_style: string
+        }
+        Insert: {
+          created_at?: string | null
+          dream_id?: string | null
+          id?: string
+          permission_statement: string
+          session_id?: string | null
+          share_image_url?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          user_id: string
+          visual_style: string
+        }
+        Update: {
+          created_at?: string | null
+          dream_id?: string | null
+          id?: string
+          permission_statement?: string
+          session_id?: string | null
+          share_image_url?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          user_id?: string
+          visual_style?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "permission_slips_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "five_whys_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "permission_slips_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       proofs: {
         Row: {
           action_id: string | null
@@ -143,6 +322,8 @@ export type Database = {
           id: string
           image_url: string | null
           note: string | null
+          permission_slip_id: string | null
+          proof_type: string | null
           reactions: string[] | null
           user_id: string
         }
@@ -153,6 +334,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           note?: string | null
+          permission_slip_id?: string | null
+          proof_type?: string | null
           reactions?: string[] | null
           user_id: string
         }
@@ -163,6 +346,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           note?: string | null
+          permission_slip_id?: string | null
+          proof_type?: string | null
           reactions?: string[] | null
           user_id?: string
         }
@@ -175,10 +360,70 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "proofs_permission_slip_id_fkey"
+            columns: ["permission_slip_id"]
+            isOneToOne: false
+            referencedRelation: "permission_slips"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "proofs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_actions: {
+        Row: {
+          category: string | null
+          completed_at: string | null
+          created_at: string | null
+          description: string | null
+          duration_minutes: number | null
+          gabby_tip: string | null
+          id: string
+          is_completed: boolean | null
+          order_index: number
+          roadmap_id: string
+          title: string
+          why_it_matters: string | null
+        }
+        Insert: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          gabby_tip?: string | null
+          id?: string
+          is_completed?: boolean | null
+          order_index?: number
+          roadmap_id: string
+          title: string
+          why_it_matters?: string | null
+        }
+        Update: {
+          category?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          description?: string | null
+          duration_minutes?: number | null
+          gabby_tip?: string | null
+          id?: string
+          is_completed?: boolean | null
+          order_index?: number
+          roadmap_id?: string
+          title?: string
+          why_it_matters?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_actions_roadmap_id_fkey"
+            columns: ["roadmap_id"]
+            isOneToOne: false
+            referencedRelation: "action_roadmaps"
             referencedColumns: ["id"]
           },
         ]
@@ -312,6 +557,7 @@ export type Database = {
           dream: string | null
           id: string
           name: string
+          notification_preferences: Json | null
           onboarding_completed: boolean | null
           stuck_point: string | null
         }
@@ -320,6 +566,7 @@ export type Database = {
           dream?: string | null
           id: string
           name: string
+          notification_preferences?: Json | null
           onboarding_completed?: boolean | null
           stuck_point?: string | null
         }
@@ -328,6 +575,7 @@ export type Database = {
           dream?: string | null
           id?: string
           name?: string
+          notification_preferences?: Json | null
           onboarding_completed?: boolean | null
           stuck_point?: string | null
         }
@@ -349,6 +597,10 @@ export type Database = {
   }
 }
 
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
 // Helper types
 export type Tables<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Row']
 export type TablesInsert<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Insert']
@@ -363,6 +615,8 @@ export type DbStreak = Tables<'streaks'>
 export type DbHypeSquad = Tables<'hype_squads'>
 export type DbSquadMember = Tables<'squad_members'>
 export type DbSquadPost = Tables<'squad_posts'>
+export type DbActionRoadmap = Tables<'action_roadmaps'>
+export type DbRoadmapAction = Tables<'roadmap_actions'>
 
 // Chat message metadata types for tokens
 export interface ChatTokenMetadata {
@@ -420,4 +674,59 @@ export type PermissionSlip = {
 export type ExtendedProof = DbProof & {
   proof_type?: 'action' | 'permission_slip' | 'milestone';
   permission_slip_id?: string | null;
+};
+
+// ============================================
+// ACTION ROADMAP TYPES - Phase 3
+// ============================================
+
+export type RoadmapStatus = 'active' | 'completed' | 'archived';
+export type RoadmapActionCategory = 'research' | 'planning' | 'action' | 'reflection' | 'connection';
+
+// Action Roadmap - the strategic path
+export type ActionRoadmap = {
+  id: string;
+  user_id: string;
+  dream: string;
+  root_motivation: string | null;
+  roadmap_title: string;
+  status: RoadmapStatus | string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+// Individual micro-action within a roadmap
+export type RoadmapAction = {
+  id: string;
+  roadmap_id: string;
+  title: string;
+  description: string | null;
+  why_it_matters: string | null;
+  duration_minutes: number | null;
+  order_index: number;
+  is_completed: boolean | null;
+  completed_at: string | null;
+  gabby_tip: string | null;
+  category: RoadmapActionCategory | string | null;
+  created_at: string | null;
+};
+
+// Roadmap with its actions (for display)
+export type ActionRoadmapWithActions = ActionRoadmap & {
+  actions: RoadmapAction[];
+};
+
+// Insert types for Supabase
+export type ActionRoadmapInsert = Omit<ActionRoadmap, 'id' | 'created_at' | 'updated_at'>;
+export type RoadmapActionInsert = {
+  roadmap_id: string;
+  title: string;
+  description?: string | null;
+  why_it_matters?: string | null;
+  duration_minutes?: number | null;
+  order_index?: number;
+  is_completed?: boolean | null;
+  completed_at?: string | null;
+  gabby_tip?: string | null;
+  category?: string | null;
 };
