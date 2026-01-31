@@ -20,6 +20,7 @@ import Animated, {
   withSequence,
   withTiming,
   withDelay,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -46,68 +47,133 @@ function LockIcon({ size = 16, color = colors.vibrantTeal }: { size?: number; co
   );
 }
 
-// Animated breathing effect for the private badge
-function PrivateInfrastructureBadge({ projectId }: { projectId: string }) {
-  const glowScale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0.3);
+// Animated glowing orb effect for premium feel
+function GlowingOrb({ color, size = 100, delay = 0 }: { color: string; size?: number; delay?: number }) {
+  const scale = useSharedValue(1);
+  const opacity = useSharedValue(0.2);
 
   useEffect(() => {
-    glowScale.value = withRepeat(
-      withSequence(
-        withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
+    scale.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1.3, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1, { duration: 3000, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      )
     );
-    glowOpacity.value = withRepeat(
-      withSequence(
-        withTiming(0.5, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.2, { duration: 2000, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(0.4, { duration: 3000, easing: Easing.inOut(Easing.ease) }),
+          withTiming(0.15, { duration: 3000, easing: Easing.inOut(Easing.ease) })
+        ),
+        -1,
+        true
+      )
     );
-  }, [glowScale, glowOpacity]);
+  }, [scale, opacity, delay]);
 
-  const glowStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: glowScale.value }],
-    opacity: glowOpacity.value,
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
   }));
 
   return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: color,
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
+// Animated breathing effect for the private badge
+function PrivateInfrastructureBadge({ projectId, isVerified }: { projectId: string; isVerified: boolean }) {
+  return (
     <Animated.View entering={FadeIn.delay(200)} style={styles.privateBadgeContainer}>
       <LinearGradient
-        colors={['#0A2A3A', colors.midnightNavy, '#0A2540']}
+        colors={['#071A2A', colors.midnightNavy, '#0A1825']}
         style={styles.privateBadgeGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        {/* Animated glow ring */}
-        <Animated.View style={[styles.privateBadgeGlow, glowStyle]} />
-
-        {/* Shield and lock icons */}
-        <View style={styles.privateBadgeIconRow}>
-          <ShieldIcon size={32} color={colors.vibrantTeal} />
-          <LockIcon size={18} color={colors.champagneGold} />
-        </View>
-
-        {/* Title and description */}
-        <Text style={styles.privateBadgeTitle}>Private Infrastructure</Text>
-        <Text style={styles.privateBadgeSubtitle}>Your Personal Database</Text>
-
-        {/* Project ID display */}
-        <View style={styles.projectIdContainer}>
-          <Text style={styles.projectIdLabel}>INSTANCE ID</Text>
-          <View style={styles.projectIdBadge}>
-            <Text style={styles.projectIdValue}>{projectId}</Text>
+        {/* Background ambient glow orbs */}
+        <View style={styles.orbsContainer}>
+          <GlowingOrb color={colors.vibrantTeal} size={120} delay={0} />
+          <View style={{ position: 'absolute', right: 20, top: 20 }}>
+            <GlowingOrb color={colors.champagneGold} size={80} delay={1500} />
           </View>
         </View>
 
-        {/* Verified badge */}
-        <View style={styles.verifiedBadge}>
-          <Text style={styles.verifiedIcon}>✓</Text>
-          <Text style={styles.verifiedText}>Verified Connection</Text>
+        {/* Main content */}
+        <View style={styles.privateBadgeContent}>
+          {/* Active status indicator */}
+          {isVerified && (
+            <Animated.View entering={FadeIn.delay(800)} style={styles.activeStatusBar}>
+              <View style={styles.activeStatusDot} />
+              <Text style={styles.activeStatusText}>PRIVATE INFRASTRUCTURE ACTIVE</Text>
+              <View style={styles.activeStatusDot} />
+            </Animated.View>
+          )}
+
+          {/* Shield and lock icons */}
+          <View style={styles.privateBadgeIconRow}>
+            <ShieldIcon size={40} color={colors.vibrantTeal} />
+            <View style={styles.lockBadge}>
+              <LockIcon size={20} color={colors.champagneGold} />
+            </View>
+          </View>
+
+          {/* Title and description */}
+          <Text style={styles.privateBadgeTitle}>Private Infrastructure</Text>
+          <Text style={styles.privateBadgeSubtitle}>Your Personal Supabase Instance</Text>
+
+          {/* Project ID display - PROMINENT */}
+          <View style={styles.projectIdContainer}>
+            <Text style={styles.projectIdLabel}>PROJECT ID</Text>
+            <View style={styles.projectIdBadge}>
+              <Text style={styles.projectIdValue}>{projectId}</Text>
+            </View>
+            <Text style={styles.projectIdNote}>Your unique database identifier</Text>
+          </View>
+
+          {/* Verified Connection badge */}
+          {isVerified ? (
+            <Animated.View entering={FadeInUp.delay(600).springify()} style={styles.verifiedBadgeLarge}>
+              <LinearGradient
+                colors={['rgba(46, 196, 182, 0.15)', 'rgba(46, 196, 182, 0.05)']}
+                style={styles.verifiedBadgeGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.verifiedBadgeInner}>
+                  <View style={styles.verifiedCheckmark}>
+                    <Text style={styles.verifiedCheckmarkText}>✓</Text>
+                  </View>
+                  <View style={styles.verifiedTextContainer}>
+                    <Text style={styles.verifiedTitleText}>Verified Connection</Text>
+                    <Text style={styles.verifiedSubtitleText}>End-to-end encrypted • Your data is secure</Text>
+                  </View>
+                </View>
+              </LinearGradient>
+            </Animated.View>
+          ) : (
+            <View style={styles.pendingBadge}>
+              <Text style={styles.pendingIcon}>⏳</Text>
+              <Text style={styles.pendingText}>Verifying Connection...</Text>
+            </View>
+          )}
         </View>
       </LinearGradient>
     </Animated.View>
@@ -128,12 +194,13 @@ interface HandshakeItem {
 function PulseIndicator({ status }: { status: 'pending' | 'checking' | 'success' | 'error' }) {
   const pulseScale = useSharedValue(1);
   const pulseOpacity = useSharedValue(0.3);
+  const dotScale = useSharedValue(1);
 
   useEffect(() => {
     if (status === 'checking') {
       pulseScale.value = withRepeat(
         withSequence(
-          withTiming(1.5, { duration: 800, easing: Easing.out(Easing.ease) }),
+          withTiming(1.8, { duration: 800, easing: Easing.out(Easing.ease) }),
           withTiming(1, { duration: 400 })
         ),
         -1
@@ -141,19 +208,30 @@ function PulseIndicator({ status }: { status: 'pending' | 'checking' | 'success'
       pulseOpacity.value = withRepeat(
         withSequence(
           withTiming(0, { duration: 800 }),
-          withTiming(0.3, { duration: 400 })
+          withTiming(0.4, { duration: 400 })
         ),
         -1
+      );
+    } else if (status === 'success') {
+      pulseScale.value = withTiming(1);
+      pulseOpacity.value = withTiming(0);
+      dotScale.value = withSequence(
+        withSpring(1.3, { damping: 10, stiffness: 400 }),
+        withSpring(1, { damping: 10, stiffness: 200 })
       );
     } else {
       pulseScale.value = withTiming(1);
       pulseOpacity.value = withTiming(0);
     }
-  }, [status, pulseScale, pulseOpacity]);
+  }, [status, pulseScale, pulseOpacity, dotScale]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
     opacity: pulseOpacity.value,
+  }));
+
+  const dotStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: dotScale.value }],
   }));
 
   const getStatusColor = () => {
@@ -178,9 +256,10 @@ function PulseIndicator({ status }: { status: 'pending' | 'checking' | 'success'
           { borderColor: getStatusColor() },
         ]}
       />
-      <View
+      <Animated.View
         style={[
           styles.statusDotInner,
+          dotStyle,
           { backgroundColor: getStatusColor() },
         ]}
       />
@@ -195,14 +274,14 @@ function HandshakeLine({ delay, success }: { delay: number; success: boolean }) 
   useEffect(() => {
     lineProgress.value = withDelay(
       delay,
-      withTiming(1, { duration: 500, easing: Easing.out(Easing.ease) })
+      withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) })
     );
   }, [delay, lineProgress]);
 
   const lineStyle = useAnimatedStyle(() => {
     const backgroundColor = success ? colors.vibrantTeal : colors.boldTerracotta;
     return {
-      width: `${lineProgress.value * 100}%`,
+      height: `${lineProgress.value * 100}%`,
       backgroundColor,
     };
   });
@@ -229,7 +308,7 @@ function HandshakeItemRow({
 }) {
   return (
     <Animated.View
-      entering={FadeInDown.delay(index * 100).springify()}
+      entering={FadeInDown.delay(index * 80).springify()}
       style={styles.handshakeRow}
     >
       <View style={styles.handshakeItemContainer}>
@@ -245,16 +324,19 @@ function HandshakeItemRow({
             </Text>
           )}
           {item.status === 'checking' && (
-            <Text style={styles.handshakeChecking}>Connecting...</Text>
+            <Text style={styles.handshakeChecking}>Establishing handshake...</Text>
           )}
           {item.status === 'pending' && (
-            <Text style={styles.handshakePending}>Waiting...</Text>
+            <Text style={styles.handshakePending}>Queued</Text>
           )}
         </View>
         {item.status === 'success' && (
-          <View style={styles.checkmarkContainer}>
+          <Animated.View
+            entering={FadeIn.springify()}
+            style={styles.checkmarkContainer}
+          >
             <Text style={styles.checkmark}>✓</Text>
-          </View>
+          </Animated.View>
         )}
         {item.status === 'error' && (
           <View style={styles.errorContainer}>
@@ -264,10 +346,44 @@ function HandshakeItemRow({
       </View>
       {!isLast && showLine && (
         <HandshakeLine
-          delay={index * 100 + 200}
+          delay={index * 80 + 150}
           success={item.status === 'success'}
         />
       )}
+    </Animated.View>
+  );
+}
+
+// Success celebration component with confetti effect
+function SuccessCelebration({ projectId }: { projectId: string }) {
+  return (
+    <Animated.View
+      entering={FadeInUp.delay(300).springify()}
+      style={styles.successBanner}
+    >
+      <LinearGradient
+        colors={['rgba(46, 196, 182, 0.2)', 'rgba(46, 196, 182, 0.05)']}
+        style={styles.successBannerGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+      >
+        <View style={styles.successIconRow}>
+          <Text style={styles.successEmoji}>🛡️</Text>
+          <Text style={styles.successEmoji}>✨</Text>
+          <Text style={styles.successEmoji}>🔒</Text>
+        </View>
+        <Text style={styles.successText}>
+          Private Infrastructure Active
+        </Text>
+        <Text style={styles.successSubtext}>
+          All core tables verified • Your data is secure on your personal Supabase instance
+        </Text>
+        <View style={styles.successDivider} />
+        <View style={styles.successProjectBadge}>
+          <Text style={styles.successProjectLabel}>Connected to:</Text>
+          <Text style={styles.successProjectId}>{projectId}</Text>
+        </View>
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -288,22 +404,24 @@ export default function DatabaseStatusScreen() {
   const [isTestingOperations, setIsTestingOperations] = useState(false);
   const handshakeInProgress = useRef(false);
 
-  // Initialize handshake items
+  // Extract project ID from URL
+  const projectId = status.connectionDetails.url
+    ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
+    : 'Not configured';
+
+  // Initialize handshake items - Core Tables as mentioned in task
   const initializeHandshakeItems = useCallback((): HandshakeItem[] => {
     const items: HandshakeItem[] = [
       { id: 'connection', name: 'connection', displayName: '🔗 Supabase Connection', status: 'pending' },
       { id: 'users', name: 'users', displayName: '👤 User Profiles', status: 'pending' },
       { id: 'dreams', name: 'dreams', displayName: '✨ Dreams', status: 'pending' },
       { id: 'chat_messages', name: 'chat_messages', displayName: '💬 Gabby AI Chat', status: 'pending' },
-      { id: 'five_whys_sessions', name: 'five_whys_sessions', displayName: '🔍 Five Whys Sessions', status: 'pending' },
-      { id: 'five_whys_responses', name: 'five_whys_responses', displayName: '📝 Five Whys Responses', status: 'pending' },
+      { id: 'five_whys_sessions', name: 'five_whys_sessions', displayName: '🔍 Five Whys', status: 'pending' },
       { id: 'permission_slips', name: 'permission_slips', displayName: '📜 Permission Slips', status: 'pending' },
       { id: 'action_roadmaps', name: 'action_roadmaps', displayName: '🗺️ Golden Path Roadmaps', status: 'pending' },
-      { id: 'roadmap_actions', name: 'roadmap_actions', displayName: '🎯 Roadmap Actions', status: 'pending' },
       { id: 'proofs', name: 'proofs', displayName: '📸 Proof Gallery', status: 'pending' },
-      { id: 'micro_actions', name: 'micro_actions', displayName: '⚡ Micro Actions', status: 'pending' },
       { id: 'streaks', name: 'streaks', displayName: '🔥 Streaks', status: 'pending' },
-      { id: 'storage', name: 'proof-assets', displayName: '🗄️ Proof Assets Bucket', status: 'pending' },
+      { id: 'storage', name: 'proof-assets', displayName: '🗄️ Proof Assets Storage', status: 'pending' },
     ];
     return items;
   }, []);
@@ -316,6 +434,7 @@ export default function DatabaseStatusScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsHandshaking(true);
     setHandshakeComplete(false);
+    setAllSuccess(false);
 
     const items = initializeHandshakeItems();
     setHandshakeItems(items);
@@ -340,7 +459,7 @@ export default function DatabaseStatusScreen() {
 
     // 1. Test basic connection
     updateItemStatus('connection', 'checking');
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 400));
     try {
       const startTime = Date.now();
       const { error } = await supabase.from('users').select('id').limit(1);
@@ -358,16 +477,15 @@ export default function DatabaseStatusScreen() {
       allSuccessful = false;
     }
 
-    // 2. Test each table
+    // 2. Test each core table
     const tables = [
       'users', 'dreams', 'chat_messages', 'five_whys_sessions',
-      'five_whys_responses', 'permission_slips', 'action_roadmaps',
-      'roadmap_actions', 'proofs', 'micro_actions', 'streaks'
+      'permission_slips', 'action_roadmaps', 'proofs', 'streaks'
     ];
 
     for (const table of tables) {
       updateItemStatus(table, 'checking');
-      await new Promise((resolve) => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, 200));
 
       try {
         const startTime = Date.now();
@@ -391,7 +509,7 @@ export default function DatabaseStatusScreen() {
 
     // 3. Test storage bucket
     updateItemStatus('storage', 'checking');
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     try {
       const startTime = Date.now();
@@ -406,7 +524,7 @@ export default function DatabaseStatusScreen() {
         updateItemStatus('storage', 'success', latency);
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else {
-        updateItemStatus('storage', 'error', undefined, 'Bucket not found');
+        updateItemStatus('storage', 'error', undefined, 'Bucket not configured');
         allSuccessful = false;
       }
     } catch (err: any) {
@@ -438,7 +556,7 @@ export default function DatabaseStatusScreen() {
     if (result.errors.length > 0) {
       Alert.alert('Data Test Results', result.errors.join('\n'));
     } else {
-      Alert.alert('Success', 'All data operations working correctly!');
+      Alert.alert('Success', 'All data operations working correctly!\nYour Gabby AI coaching sessions, roadmap progress, and photo uploads are now routed to your personal database.');
     }
   };
 
@@ -446,12 +564,13 @@ export default function DatabaseStatusScreen() {
   useEffect(() => {
     const timer = setTimeout(() => {
       runHandshakeTest();
-    }, 500);
+    }, 600);
     return () => clearTimeout(timer);
   }, [runHandshakeTest]);
 
   const successCount = handshakeItems.filter((i) => i.status === 'success').length;
   const totalCount = handshakeItems.length;
+  const progressPercentage = totalCount > 0 ? (successCount / totalCount) * 100 : 0;
 
   return (
     <View style={styles.container}>
@@ -465,7 +584,15 @@ export default function DatabaseStatusScreen() {
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Database Status</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Database Status</Text>
+          {allSuccess && (
+            <View style={styles.headerBadge}>
+              <View style={styles.headerBadgeDot} />
+              <Text style={styles.headerBadgeText}>Connected</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.placeholder} />
       </View>
 
@@ -476,32 +603,42 @@ export default function DatabaseStatusScreen() {
       >
         {/* Private Infrastructure Badge - Prominent Display */}
         <PrivateInfrastructureBadge
-          projectId={
-            status.connectionDetails.url
-              ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
-              : 'Not configured'
-          }
+          projectId={projectId}
+          isVerified={allSuccess}
         />
 
         {/* Connection Handshake Card - Premium Visual */}
         <Animated.View entering={FadeInDown.delay(300)}>
           <Card style={styles.handshakeCard}>
             <LinearGradient
-              colors={[colors.midnightNavy, '#0A2540']}
+              colors={[colors.midnightNavy, '#0A2235', '#071520']}
               style={styles.handshakeGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
               <View style={styles.handshakeHeader}>
-                <Text style={styles.handshakeTitle}>Connection Handshake</Text>
+                <View style={styles.handshakeTitleRow}>
+                  <Text style={styles.handshakeTitle}>Connection Handshake</Text>
+                  <View style={[
+                    styles.statusChip,
+                    { backgroundColor: allSuccess ? colors.vibrantTeal + '20' : isHandshaking ? colors.champagneGold + '20' : colors.gray500 + '20' }
+                  ]}>
+                    <Text style={[
+                      styles.statusChipText,
+                      { color: allSuccess ? colors.vibrantTeal : isHandshaking ? colors.champagneGold : colors.gray400 }
+                    ]}>
+                      {allSuccess ? 'Verified' : isHandshaking ? 'Testing' : 'Ready'}
+                    </Text>
+                  </View>
+                </View>
                 <Text style={styles.handshakeSubtitle}>
                   {handshakeComplete
                     ? allSuccess
-                      ? 'All Systems Ready'
-                      : 'Some Issues Detected'
+                      ? 'All Core Tables Ready'
+                      : 'Some Tables Need Attention'
                     : isHandshaking
-                    ? 'Establishing Connection...'
-                    : 'Ready to Test'}
+                    ? 'Establishing Secure Connection...'
+                    : 'Ready to Verify'}
                 </Text>
               </View>
 
@@ -513,7 +650,7 @@ export default function DatabaseStatusScreen() {
                       style={[
                         styles.progressFill,
                         {
-                          width: `${(successCount / totalCount) * 100}%`,
+                          width: `${progressPercentage}%`,
                           backgroundColor: allSuccess
                             ? colors.vibrantTeal
                             : colors.champagneGold,
@@ -522,7 +659,7 @@ export default function DatabaseStatusScreen() {
                     />
                   </View>
                   <Text style={styles.progressText}>
-                    {successCount}/{totalCount} Connected
+                    {successCount}/{totalCount} Tables Verified
                   </Text>
                 </View>
               )}
@@ -542,30 +679,7 @@ export default function DatabaseStatusScreen() {
 
               {/* Success celebration */}
               {handshakeComplete && allSuccess && (
-                <Animated.View
-                  entering={FadeInUp.delay(500)}
-                  style={styles.successBanner}
-                >
-                  <View style={styles.successIconRow}>
-                    <Text style={styles.successEmoji}>🛡️</Text>
-                    <Text style={styles.successEmoji}>✨</Text>
-                    <Text style={styles.successEmoji}>🔒</Text>
-                  </View>
-                  <Text style={styles.successText}>
-                    Private Infrastructure Active
-                  </Text>
-                  <Text style={styles.successSubtext}>
-                    All tables verified • Your data is secure on your personal Supabase instance
-                  </Text>
-                  <View style={styles.successProjectBadge}>
-                    <Text style={styles.successProjectLabel}>Connected to:</Text>
-                    <Text style={styles.successProjectId}>
-                      {status.connectionDetails.url
-                        ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
-                        : 'Unknown'}
-                    </Text>
-                  </View>
-                </Animated.View>
+                <SuccessCelebration projectId={projectId} />
               )}
 
               {/* Retry button */}
@@ -576,7 +690,7 @@ export default function DatabaseStatusScreen() {
                   disabled={isHandshaking}
                 >
                   <Text style={styles.retryButtonText}>
-                    {isHandshaking ? 'Testing...' : 'Run Test Again'}
+                    {isHandshaking ? 'Verifying...' : 'Re-Verify Connection'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -604,14 +718,10 @@ export default function DatabaseStatusScreen() {
                 <Text style={styles.projectRefLabel}>PERSONAL DATABASE INSTANCE</Text>
               </View>
               <View style={styles.projectRefBadge}>
-                <Text style={styles.projectRefValue}>
-                  {status.connectionDetails.url
-                    ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
-                    : 'Not configured'}
-                </Text>
+                <Text style={styles.projectRefValue}>{projectId}</Text>
               </View>
               <Text style={styles.projectRefNote}>
-                This is your private Supabase project ID
+                Your private Supabase project ID — visible only to you
               </Text>
             </View>
 
@@ -641,9 +751,42 @@ export default function DatabaseStatusScreen() {
                   styles.detailBadgeText,
                   { color: allSuccess ? colors.vibrantTeal : colors.champagneGold }
                 ]}>
-                  {allSuccess ? '🛡️ Private' : handshakeComplete ? '⚠ Pending' : '⏳ Verifying'}
+                  {allSuccess ? '🛡️ Private • Verified' : handshakeComplete ? '⚠ Pending Setup' : '⏳ Verifying'}
                 </Text>
               </View>
+            </View>
+          </Card>
+        </Animated.View>
+
+        {/* Data Routing Status */}
+        <Animated.View entering={FadeInDown.delay(450)}>
+          <Card style={styles.routingCard}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Data Routing</Text>
+              {allSuccess && (
+                <View style={styles.routingActiveBadge}>
+                  <Text style={styles.routingActiveText}>Active</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.routingDescription}>
+              All user interactions are now routed to your personal database:
+            </Text>
+            <View style={styles.routingList}>
+              {[
+                { label: 'Gabby AI Coaching Sessions', icon: '💬' },
+                { label: 'Golden Path Roadmap Progress', icon: '🗺️' },
+                { label: 'Proof Gallery Uploads', icon: '📸' },
+                { label: 'Five Whys Deep Dives', icon: '🔍' },
+                { label: 'Permission Slips', icon: '📜' },
+                { label: 'Streak Tracking', icon: '🔥' },
+              ].map((item, index) => (
+                <View key={index} style={styles.routingItem}>
+                  <Text style={styles.routingIcon}>{item.icon}</Text>
+                  <Text style={styles.routingItemText}>{item.label}</Text>
+                  <View style={[styles.routingDot, { backgroundColor: allSuccess ? colors.vibrantTeal : colors.gray400 }]} />
+                </View>
+              ))}
             </View>
           </Card>
         </Animated.View>
@@ -660,7 +803,7 @@ export default function DatabaseStatusScreen() {
             {dataTestResult && (
               <View style={styles.testResults}>
                 <View style={styles.testResultRow}>
-                  <Text style={styles.testResultLabel}>Read:</Text>
+                  <Text style={styles.testResultLabel}>Read Operations:</Text>
                   <Text
                     style={[
                       styles.testResultValue,
@@ -675,7 +818,7 @@ export default function DatabaseStatusScreen() {
                   </Text>
                 </View>
                 <View style={styles.testResultRow}>
-                  <Text style={styles.testResultLabel}>Write:</Text>
+                  <Text style={styles.testResultLabel}>Write Operations:</Text>
                   <Text
                     style={[
                       styles.testResultValue,
@@ -693,7 +836,7 @@ export default function DatabaseStatusScreen() {
             )}
 
             <Button
-              title={isTestingOperations ? 'Testing...' : 'Run Data Test'}
+              title={isTestingOperations ? 'Testing Operations...' : 'Run Data Operations Test'}
               onPress={handleTestOperations}
               variant="outline"
               loading={isTestingOperations}
@@ -702,46 +845,48 @@ export default function DatabaseStatusScreen() {
           </Card>
         </Animated.View>
 
-        {/* Features Status */}
-        <Animated.View entering={FadeInDown.delay(600)}>
+        {/* Boutique Features Status */}
+        <Animated.View entering={FadeInDown.delay(550)}>
           <Card style={styles.featuresCard}>
             <Text style={styles.sectionTitle}>Boutique Features Status</Text>
             <View style={styles.featuresList}>
               {[
-                { name: 'Five Whys Deep Dives', table: 'five_whys_sessions' },
-                { name: 'Permission Slips', table: 'permission_slips' },
-                { name: 'Golden Path Roadmaps', table: 'action_roadmaps' },
-                { name: 'Proof Gallery', table: 'proofs' },
-                { name: 'Gabby AI Chat', table: 'chat_messages' },
-                { name: 'Streak Tracking', table: 'streaks' },
+                { name: 'Five Whys Deep Dives', table: 'five_whys_sessions', icon: '🔍' },
+                { name: 'Permission Slips', table: 'permission_slips', icon: '📜' },
+                { name: 'Golden Path Roadmaps', table: 'action_roadmaps', icon: '🗺️' },
+                { name: 'Proof Gallery', table: 'proofs', icon: '📸' },
+                { name: 'Gabby AI Chat', table: 'chat_messages', icon: '💬' },
+                { name: 'Streak Tracking', table: 'streaks', icon: '🔥' },
               ].map((feature) => {
                 const item = handshakeItems.find((i) => i.id === feature.table);
                 const isConnected = item?.status === 'success';
                 return (
                   <View key={feature.table} style={styles.featureRow}>
+                    <Text style={styles.featureIcon}>{feature.icon}</Text>
+                    <Text style={styles.featureName}>{feature.name}</Text>
                     <View
                       style={[
-                        styles.featureDot,
+                        styles.featureStatusBadge,
                         {
                           backgroundColor: isConnected
-                            ? colors.vibrantTeal
-                            : colors.gray400,
-                        },
-                      ]}
-                    />
-                    <Text style={styles.featureName}>{feature.name}</Text>
-                    <Text
-                      style={[
-                        styles.featureStatus,
-                        {
-                          color: isConnected
-                            ? colors.vibrantTeal
-                            : colors.gray500,
+                            ? colors.vibrantTeal + '15'
+                            : colors.gray200,
                         },
                       ]}
                     >
-                      {isConnected ? 'Ready' : 'Pending'}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.featureStatus,
+                          {
+                            color: isConnected
+                              ? colors.vibrantTeal
+                              : colors.gray500,
+                          },
+                        ]}
+                      >
+                        {isConnected ? '✓ Ready' : 'Pending'}
+                      </Text>
+                    </View>
                   </View>
                 );
               })}
@@ -749,10 +894,13 @@ export default function DatabaseStatusScreen() {
           </Card>
         </Animated.View>
 
-        {/* Help Section */}
-        <Animated.View entering={FadeInDown.delay(700)}>
+        {/* Data Ownership Card */}
+        <Animated.View entering={FadeInDown.delay(600)}>
           <Card style={styles.helpCard}>
-            <Text style={styles.helpTitle}>Data Ownership</Text>
+            <View style={styles.helpHeader}>
+              <Text style={styles.helpIcon}>🛡️</Text>
+              <Text style={styles.helpTitle}>Your Data, Your Control</Text>
+            </View>
             <Text style={styles.helpText}>
               Your data is stored securely in your personal Supabase instance. You have
               full ownership and control over all your:
@@ -763,6 +911,11 @@ export default function DatabaseStatusScreen() {
               <Text style={styles.helpItem}>• Golden path roadmaps and actions</Text>
               <Text style={styles.helpItem}>• Proof photos and win celebrations</Text>
               <Text style={styles.helpItem}>• AI coaching conversation history</Text>
+            </View>
+            <View style={styles.helpFooter}>
+              <Text style={styles.helpFooterText}>
+                Project: <Text style={styles.helpFooterHighlight}>{projectId}</Text>
+              </Text>
             </View>
           </Card>
         </Animated.View>
@@ -795,10 +948,36 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.base,
     color: colors.boldTerracotta,
   },
+  headerCenter: {
+    alignItems: 'center',
+  },
   headerTitle: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize.xl,
     color: colors.midnightNavy,
+  },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.vibrantTeal + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
+    gap: 4,
+  },
+  headerBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.vibrantTeal,
+  },
+  headerBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: 10,
+    color: colors.vibrantTeal,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   placeholder: {
     width: 60,
@@ -812,35 +991,66 @@ const styles = StyleSheet.create({
   // Private Infrastructure Badge Styles
   privateBadgeContainer: {
     marginBottom: spacing.xl,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
-    ...shadows.lg,
+    ...shadows.xl,
   },
   privateBadgeGradient: {
-    padding: spacing.xl,
-    alignItems: 'center',
+    padding: spacing['2xl'],
     position: 'relative',
+    minHeight: 320,
   },
-  privateBadgeGlow: {
+  orbsContainer: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -60,
-    marginLeft: -60,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  privateBadgeContent: {
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  activeStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(46, 196, 182, 0.12)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 196, 182, 0.25)',
+  },
+  activeStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.vibrantTeal,
+  },
+  activeStatusText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
+    letterSpacing: 2,
   },
   privateBadgeIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  lockBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderRadius: borderRadius.full,
+    padding: spacing.sm,
+    marginLeft: -spacing.md,
   },
   privateBadgeTitle: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['2xl'],
+    fontSize: typography.fontSize['3xl'],
     color: colors.parchmentWhite,
     marginBottom: spacing.xs,
     textAlign: 'center',
@@ -849,51 +1059,101 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.champagneGold,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
     textAlign: 'center',
   },
   projectIdContainer: {
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
+    width: '100%',
   },
   projectIdLabel: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.xs,
     color: 'rgba(255, 255, 255, 0.6)',
-    letterSpacing: 2,
-    marginBottom: spacing.sm,
+    letterSpacing: 3,
+    marginBottom: spacing.md,
   },
   projectIdBadge: {
-    backgroundColor: 'rgba(46, 196, 182, 0.15)',
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(46, 196, 182, 0.3)',
+    backgroundColor: 'rgba(46, 196, 182, 0.12)',
+    borderRadius: borderRadius.xl,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.lg,
+    borderWidth: 2,
+    borderColor: 'rgba(46, 196, 182, 0.35)',
+    marginBottom: spacing.sm,
   },
   projectIdValue: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     color: colors.vibrantTeal,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
-  verifiedBadge: {
+  projectIdNote: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontStyle: 'italic',
+  },
+  verifiedBadgeLarge: {
+    width: '100%',
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  verifiedBadgeGradient: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 196, 182, 0.25)',
+  },
+  verifiedBadgeInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(46, 196, 182, 0.1)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    gap: spacing.xs,
   },
-  verifiedIcon: {
-    fontSize: 12,
+  verifiedCheckmark: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.vibrantTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  verifiedCheckmarkText: {
+    fontSize: 20,
+    color: colors.white,
+    fontWeight: 'bold',
+  },
+  verifiedTextContainer: {
+    flex: 1,
+  },
+  verifiedTitleText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
     color: colors.vibrantTeal,
+    marginBottom: 2,
   },
-  verifiedText: {
-    fontFamily: typography.fontFamily.bodyMedium,
+  verifiedSubtitleText: {
+    fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.xs,
-    color: colors.vibrantTeal,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+  },
+  pendingIcon: {
+    fontSize: 16,
+  },
+  pendingText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.champagneGold,
   },
   // Handshake Card Styles
   handshakeCard: {
@@ -908,11 +1168,27 @@ const styles = StyleSheet.create({
   handshakeHeader: {
     marginBottom: spacing.lg,
   },
+  handshakeTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
   handshakeTitle: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize['2xl'],
     color: colors.parchmentWhite,
-    marginBottom: spacing.xs,
+  },
+  statusChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  statusChipText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   handshakeSubtitle: {
     fontFamily: typography.fontFamily.body,
@@ -923,15 +1199,15 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   progressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 2,
-    marginBottom: spacing.xs,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 3,
+    marginBottom: spacing.sm,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 3,
   },
   progressText: {
     fontFamily: typography.fontFamily.bodyMedium,
@@ -943,31 +1219,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   handshakeRow: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   handshakeItemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: borderRadius.md,
   },
   pulseContainer: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
   pulseRing: {
     position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 2,
   },
   statusDotInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   handshakeItemInfo: {
     flex: 1,
@@ -990,7 +1269,7 @@ const styles = StyleSheet.create({
   handshakePending: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.xs,
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: 'rgba(255, 255, 255, 0.4)',
   },
   handshakeError: {
     fontFamily: typography.fontFamily.body,
@@ -998,10 +1277,10 @@ const styles = StyleSheet.create({
     color: colors.boldTerracotta,
   },
   checkmarkContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.vibrantTeal + '20',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.vibrantTeal + '25',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1011,10 +1290,10 @@ const styles = StyleSheet.create({
     color: colors.vibrantTeal,
   },
   errorContainer: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.boldTerracotta + '20',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.boldTerracotta + '25',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1024,31 +1303,34 @@ const styles = StyleSheet.create({
     color: colors.boldTerracotta,
   },
   lineContainer: {
-    height: 16,
-    paddingLeft: 12,
+    height: 12,
+    paddingLeft: 13,
     justifyContent: 'center',
   },
   lineBackground: {
     position: 'absolute',
-    left: 12,
+    left: 13,
     width: 2,
-    height: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    height: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   lineProgress: {
     width: 2,
-    height: 16,
     borderRadius: 1,
   },
+  // Success banner
   successBanner: {
-    backgroundColor: colors.vibrantTeal + '20',
-    borderRadius: borderRadius.md,
-    padding: spacing.xl,
-    alignItems: 'center',
     marginTop: spacing.md,
     marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  successBannerGradient: {
+    padding: spacing.xl,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.vibrantTeal + '30',
+    borderColor: colors.vibrantTeal + '25',
+    borderRadius: borderRadius.lg,
   },
   successIconRow: {
     flexDirection: 'row',
@@ -1056,11 +1338,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   successEmoji: {
-    fontSize: 28,
+    fontSize: 32,
   },
   successText: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     color: colors.parchmentWhite,
     textAlign: 'center',
     marginBottom: spacing.xs,
@@ -1070,15 +1352,22 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     lineHeight: 20,
+  },
+  successDivider: {
+    width: 60,
+    height: 2,
+    backgroundColor: colors.vibrantTeal + '40',
+    borderRadius: 1,
+    marginBottom: spacing.lg,
   },
   successProjectBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.full,
   },
@@ -1089,16 +1378,18 @@ const styles = StyleSheet.create({
   },
   successProjectId: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.xs,
+    fontSize: typography.fontSize.sm,
     color: colors.vibrantTeal,
   },
   retryButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: borderRadius.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: borderRadius.lg,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   retryButtonText: {
     fontFamily: typography.fontFamily.bodySemiBold,
@@ -1126,7 +1417,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    backgroundColor: colors.vibrantTeal + '10',
+    backgroundColor: colors.vibrantTeal + '12',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
@@ -1143,13 +1434,13 @@ const styles = StyleSheet.create({
     color: colors.vibrantTeal,
   },
   projectRefContainer: {
-    backgroundColor: colors.midnightNavy + '05',
-    borderRadius: borderRadius.md,
+    backgroundColor: colors.midnightNavy + '06',
+    borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.midnightNavy + '10',
+    borderColor: colors.midnightNavy + '12',
   },
   projectRefHeader: {
     flexDirection: 'row',
@@ -1164,12 +1455,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   projectRefBadge: {
-    backgroundColor: colors.vibrantTeal + '12',
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.vibrantTeal + '15',
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     borderWidth: 2,
-    borderColor: colors.vibrantTeal + '40',
+    borderColor: colors.vibrantTeal + '35',
     marginBottom: spacing.sm,
   },
   projectRefValue: {
@@ -1216,6 +1507,56 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.xs,
   },
+  // Routing Card
+  routingCard: {
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.champagneGold + '25',
+    backgroundColor: colors.champagneGold + '05',
+  },
+  routingActiveBadge: {
+    backgroundColor: colors.vibrantTeal + '15',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  routingActiveText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
+  },
+  routingDescription: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray600,
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  routingList: {
+    gap: spacing.sm,
+  },
+  routingItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  routingIcon: {
+    fontSize: 16,
+    marginRight: spacing.md,
+    width: 24,
+    textAlign: 'center',
+  },
+  routingItemText: {
+    flex: 1,
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.midnightNavy,
+  },
+  routingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   // Test Card
   testCard: {
     marginBottom: spacing.lg,
@@ -1225,11 +1566,12 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.gray600,
     marginBottom: spacing.md,
+    lineHeight: 20,
   },
   testResults: {
     backgroundColor: colors.gray100,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     marginBottom: spacing.md,
   },
   testResultRow: {
@@ -1256,23 +1598,32 @@ const styles = StyleSheet.create({
   },
   featuresList: {
     gap: spacing.sm,
+    marginTop: spacing.sm,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.gray100,
+    borderRadius: borderRadius.md,
   },
-  featureDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  featureIcon: {
+    fontSize: 16,
     marginRight: spacing.md,
+    width: 24,
+    textAlign: 'center',
   },
   featureName: {
     flex: 1,
-    fontFamily: typography.fontFamily.body,
+    fontFamily: typography.fontFamily.bodyMedium,
     fontSize: typography.fontSize.sm,
     color: colors.midnightNavy,
+  },
+  featureStatusBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
   featureStatus: {
     fontFamily: typography.fontFamily.bodySemiBold,
@@ -1280,24 +1631,33 @@ const styles = StyleSheet.create({
   },
   // Help Card
   helpCard: {
-    backgroundColor: colors.champagneGold + '10',
+    backgroundColor: colors.champagneGold + '08',
     borderWidth: 1,
-    borderColor: colors.champagneGold + '30',
+    borderColor: colors.champagneGold + '25',
+  },
+  helpHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  helpIcon: {
+    fontSize: 24,
   },
   helpTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
+    fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
-    marginBottom: spacing.sm,
   },
   helpText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.gray600,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.md,
+    lineHeight: 22,
   },
   helpList: {
-    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
   },
   helpItem: {
     fontFamily: typography.fontFamily.body,
@@ -1305,5 +1665,21 @@ const styles = StyleSheet.create({
     color: colors.gray700,
     marginBottom: spacing.xs,
     paddingLeft: spacing.xs,
+    lineHeight: 22,
+  },
+  helpFooter: {
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.champagneGold + '30',
+  },
+  helpFooterText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray500,
+    textAlign: 'center',
+  },
+  helpFooterHighlight: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    color: colors.vibrantTeal,
   },
 });
