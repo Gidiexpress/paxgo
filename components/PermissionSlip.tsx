@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -14,7 +14,6 @@ import Animated, {
 import { colors, typography, borderRadius, shadows, spacing } from '@/constants/theme';
 import { PermissionSlip as PermissionSlipType } from '@/types';
 import { PermissionSlipStyle, PERMISSION_SLIP_STYLES } from '@/services/aiService';
-import { useEffect } from 'react';
 
 const { width } = Dimensions.get('window');
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions , Text } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors } from '@/constants/theme';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -281,8 +282,6 @@ export function CelebrationOverlay({
     </View>
   );
 }
-
-import { Text } from 'react-native';
 
 const styles = StyleSheet.create({
   container: {

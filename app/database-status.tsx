@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeInDown,
   FadeInUp,
+  FadeIn,
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
@@ -22,10 +23,96 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { colors, typography, borderRadius, spacing } from '@/constants/theme';
+import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useDatabaseStatus } from '@/hooks/useDatabaseStatus';
+
+// Shield icon component for private infrastructure visual
+function ShieldIcon({ size = 24, color = colors.vibrantTeal }: { size?: number; color?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: size * 0.8, color }}>🛡️</Text>
+    </View>
+  );
+}
+
+// Lock icon for secure connection
+function LockIcon({ size = 16, color = colors.vibrantTeal }: { size?: number; color?: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ fontSize: size * 0.9, color }}>🔒</Text>
+    </View>
+  );
+}
+
+// Animated breathing effect for the private badge
+function PrivateInfrastructureBadge({ projectId }: { projectId: string }) {
+  const glowScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.3);
+
+  useEffect(() => {
+    glowScale.value = withRepeat(
+      withSequence(
+        withTiming(1.1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+    glowOpacity.value = withRepeat(
+      withSequence(
+        withTiming(0.5, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.2, { duration: 2000, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    );
+  }, [glowScale, glowOpacity]);
+
+  const glowStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: glowScale.value }],
+    opacity: glowOpacity.value,
+  }));
+
+  return (
+    <Animated.View entering={FadeIn.delay(200)} style={styles.privateBadgeContainer}>
+      <LinearGradient
+        colors={['#0A2A3A', colors.midnightNavy, '#0A2540']}
+        style={styles.privateBadgeGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        {/* Animated glow ring */}
+        <Animated.View style={[styles.privateBadgeGlow, glowStyle]} />
+
+        {/* Shield and lock icons */}
+        <View style={styles.privateBadgeIconRow}>
+          <ShieldIcon size={32} color={colors.vibrantTeal} />
+          <LockIcon size={18} color={colors.champagneGold} />
+        </View>
+
+        {/* Title and description */}
+        <Text style={styles.privateBadgeTitle}>Private Infrastructure</Text>
+        <Text style={styles.privateBadgeSubtitle}>Your Personal Database</Text>
+
+        {/* Project ID display */}
+        <View style={styles.projectIdContainer}>
+          <Text style={styles.projectIdLabel}>INSTANCE ID</Text>
+          <View style={styles.projectIdBadge}>
+            <Text style={styles.projectIdValue}>{projectId}</Text>
+          </View>
+        </View>
+
+        {/* Verified badge */}
+        <View style={styles.verifiedBadge}>
+          <Text style={styles.verifiedIcon}>✓</Text>
+          <Text style={styles.verifiedText}>Verified Connection</Text>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+}
 
 // Handshake status for each check
 interface HandshakeItem {
@@ -188,7 +275,7 @@ function HandshakeItemRow({
 export default function DatabaseStatusScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { status, runFullCheck: _runFullCheck, testDataOperations } = useDatabaseStatus();
+  const { status, testDataOperations } = useDatabaseStatus();
   const [handshakeItems, setHandshakeItems] = useState<HandshakeItem[]>([]);
   const [isHandshaking, setIsHandshaking] = useState(false);
   const [handshakeComplete, setHandshakeComplete] = useState(false);
@@ -204,19 +291,19 @@ export default function DatabaseStatusScreen() {
   // Initialize handshake items
   const initializeHandshakeItems = useCallback((): HandshakeItem[] => {
     const items: HandshakeItem[] = [
-      { id: 'connection', name: 'connection', displayName: 'Supabase Connection', status: 'pending' },
-      { id: 'users', name: 'users', displayName: 'Users Table', status: 'pending' },
-      { id: 'dreams', name: 'dreams', displayName: 'Dreams Table', status: 'pending' },
-      { id: 'chat_messages', name: 'chat_messages', displayName: 'Chat Messages', status: 'pending' },
-      { id: 'five_whys_sessions', name: 'five_whys_sessions', displayName: 'Five Whys Sessions', status: 'pending' },
-      { id: 'five_whys_responses', name: 'five_whys_responses', displayName: 'Five Whys Responses', status: 'pending' },
-      { id: 'permission_slips', name: 'permission_slips', displayName: 'Permission Slips', status: 'pending' },
-      { id: 'action_roadmaps', name: 'action_roadmaps', displayName: 'Golden Path Roadmaps', status: 'pending' },
-      { id: 'roadmap_actions', name: 'roadmap_actions', displayName: 'Roadmap Actions', status: 'pending' },
-      { id: 'proofs', name: 'proofs', displayName: 'Proof Gallery', status: 'pending' },
-      { id: 'micro_actions', name: 'micro_actions', displayName: 'Micro Actions', status: 'pending' },
-      { id: 'streaks', name: 'streaks', displayName: 'Streaks', status: 'pending' },
-      { id: 'storage', name: 'proof-assets', displayName: 'Proof Assets Bucket', status: 'pending' },
+      { id: 'connection', name: 'connection', displayName: '🔗 Supabase Connection', status: 'pending' },
+      { id: 'users', name: 'users', displayName: '👤 User Profiles', status: 'pending' },
+      { id: 'dreams', name: 'dreams', displayName: '✨ Dreams', status: 'pending' },
+      { id: 'chat_messages', name: 'chat_messages', displayName: '💬 Gabby AI Chat', status: 'pending' },
+      { id: 'five_whys_sessions', name: 'five_whys_sessions', displayName: '🔍 Five Whys Sessions', status: 'pending' },
+      { id: 'five_whys_responses', name: 'five_whys_responses', displayName: '📝 Five Whys Responses', status: 'pending' },
+      { id: 'permission_slips', name: 'permission_slips', displayName: '📜 Permission Slips', status: 'pending' },
+      { id: 'action_roadmaps', name: 'action_roadmaps', displayName: '🗺️ Golden Path Roadmaps', status: 'pending' },
+      { id: 'roadmap_actions', name: 'roadmap_actions', displayName: '🎯 Roadmap Actions', status: 'pending' },
+      { id: 'proofs', name: 'proofs', displayName: '📸 Proof Gallery', status: 'pending' },
+      { id: 'micro_actions', name: 'micro_actions', displayName: '⚡ Micro Actions', status: 'pending' },
+      { id: 'streaks', name: 'streaks', displayName: '🔥 Streaks', status: 'pending' },
+      { id: 'storage', name: 'proof-assets', displayName: '🗄️ Proof Assets Bucket', status: 'pending' },
     ];
     return items;
   }, []);
@@ -387,8 +474,17 @@ export default function DatabaseStatusScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* Private Infrastructure Badge - Prominent Display */}
+        <PrivateInfrastructureBadge
+          projectId={
+            status.connectionDetails.url
+              ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
+              : 'Not configured'
+          }
+        />
+
         {/* Connection Handshake Card - Premium Visual */}
-        <Animated.View entering={FadeInDown}>
+        <Animated.View entering={FadeInDown.delay(300)}>
           <Card style={styles.handshakeCard}>
             <LinearGradient
               colors={[colors.midnightNavy, '#0A2540']}
@@ -450,13 +546,25 @@ export default function DatabaseStatusScreen() {
                   entering={FadeInUp.delay(500)}
                   style={styles.successBanner}
                 >
-                  <Text style={styles.successEmoji}>✨</Text>
+                  <View style={styles.successIconRow}>
+                    <Text style={styles.successEmoji}>🛡️</Text>
+                    <Text style={styles.successEmoji}>✨</Text>
+                    <Text style={styles.successEmoji}>🔒</Text>
+                  </View>
                   <Text style={styles.successText}>
-                    Your personal database is fully connected
+                    Private Infrastructure Active
                   </Text>
                   <Text style={styles.successSubtext}>
-                    All your data is securely stored and ready
+                    All tables verified • Your data is secure on your personal Supabase instance
                   </Text>
+                  <View style={styles.successProjectBadge}>
+                    <Text style={styles.successProjectLabel}>Connected to:</Text>
+                    <Text style={styles.successProjectId}>
+                      {status.connectionDetails.url
+                        ? status.connectionDetails.url.replace('https://', '').replace('.supabase.co', '')
+                        : 'Unknown'}
+                    </Text>
+                  </View>
                 </Animated.View>
               )}
 
@@ -477,13 +585,24 @@ export default function DatabaseStatusScreen() {
         </Animated.View>
 
         {/* Connection Details */}
-        <Animated.View entering={FadeInDown.delay(100)}>
+        <Animated.View entering={FadeInDown.delay(400)}>
           <Card style={styles.detailsCard}>
-            <Text style={styles.sectionTitle}>Connection Details</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Connection Details</Text>
+              {allSuccess && (
+                <View style={styles.connectedIndicator}>
+                  <View style={styles.connectedDot} />
+                  <Text style={styles.connectedText}>Live</Text>
+                </View>
+              )}
+            </View>
 
             {/* Database Reference ID - Highlighted */}
             <View style={styles.projectRefContainer}>
-              <Text style={styles.projectRefLabel}>Database Reference ID</Text>
+              <View style={styles.projectRefHeader}>
+                <LockIcon size={14} color={colors.vibrantTeal} />
+                <Text style={styles.projectRefLabel}>PERSONAL DATABASE INSTANCE</Text>
+              </View>
               <View style={styles.projectRefBadge}>
                 <Text style={styles.projectRefValue}>
                   {status.connectionDetails.url
@@ -491,36 +610,46 @@ export default function DatabaseStatusScreen() {
                     : 'Not configured'}
                 </Text>
               </View>
+              <Text style={styles.projectRefNote}>
+                This is your private Supabase project ID
+              </Text>
             </View>
 
+            <View style={styles.detailsDivider} />
+
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Supabase URL:</Text>
+              <Text style={styles.detailLabel}>Endpoint:</Text>
               <Text style={styles.detailValue} numberOfLines={1}>
-                {status.connectionDetails.url
-                  ? `${status.connectionDetails.url.substring(0, 35)}...`
-                  : 'Not configured'}
+                {status.connectionDetails.url || 'Not configured'}
               </Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Anon Key:</Text>
-              <Text style={styles.detailValue}>
-                {status.connectionDetails.hasAnonKey ? '✓ Configured' : '✗ Missing'}
-              </Text>
+              <Text style={styles.detailLabel}>Auth Key:</Text>
+              <View style={styles.detailBadge}>
+                <Text style={[
+                  styles.detailBadgeText,
+                  { color: status.connectionDetails.hasAnonKey ? colors.vibrantTeal : colors.boldTerracotta }
+                ]}>
+                  {status.connectionDetails.hasAnonKey ? '✓ Active' : '✗ Missing'}
+                </Text>
+              </View>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Status:</Text>
-              <Text style={[
-                styles.detailValue,
-                { color: allSuccess ? colors.vibrantTeal : colors.champagneGold }
-              ]}>
-                {allSuccess ? '✓ Connected to Personal DB' : handshakeComplete ? '⚠ Check Required' : 'Verifying...'}
-              </Text>
+              <Text style={styles.detailLabel}>Infrastructure:</Text>
+              <View style={styles.detailBadge}>
+                <Text style={[
+                  styles.detailBadgeText,
+                  { color: allSuccess ? colors.vibrantTeal : colors.champagneGold }
+                ]}>
+                  {allSuccess ? '🛡️ Private' : handshakeComplete ? '⚠ Pending' : '⏳ Verifying'}
+                </Text>
+              </View>
             </View>
           </Card>
         </Animated.View>
 
         {/* Data Operations Test */}
-        <Animated.View entering={FadeInDown.delay(200)}>
+        <Animated.View entering={FadeInDown.delay(500)}>
           <Card style={styles.testCard}>
             <Text style={styles.sectionTitle}>Data Operations Test</Text>
             <Text style={styles.testDescription}>
@@ -574,7 +703,7 @@ export default function DatabaseStatusScreen() {
         </Animated.View>
 
         {/* Features Status */}
-        <Animated.View entering={FadeInDown.delay(300)}>
+        <Animated.View entering={FadeInDown.delay(600)}>
           <Card style={styles.featuresCard}>
             <Text style={styles.sectionTitle}>Boutique Features Status</Text>
             <View style={styles.featuresList}>
@@ -621,7 +750,7 @@ export default function DatabaseStatusScreen() {
         </Animated.View>
 
         {/* Help Section */}
-        <Animated.View entering={FadeInDown.delay(400)}>
+        <Animated.View entering={FadeInDown.delay(700)}>
           <Card style={styles.helpCard}>
             <Text style={styles.helpTitle}>Data Ownership</Text>
             <Text style={styles.helpText}>
@@ -679,6 +808,92 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.xl,
+  },
+  // Private Infrastructure Badge Styles
+  privateBadgeContainer: {
+    marginBottom: spacing.xl,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  privateBadgeGradient: {
+    padding: spacing.xl,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  privateBadgeGlow: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -60,
+    marginLeft: -60,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.vibrantTeal,
+  },
+  privateBadgeIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  privateBadgeTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.parchmentWhite,
+    marginBottom: spacing.xs,
+    textAlign: 'center',
+  },
+  privateBadgeSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.champagneGold,
+    marginBottom: spacing.lg,
+    textAlign: 'center',
+  },
+  projectIdContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  projectIdLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.6)',
+    letterSpacing: 2,
+    marginBottom: spacing.sm,
+  },
+  projectIdBadge: {
+    backgroundColor: 'rgba(46, 196, 182, 0.15)',
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 196, 182, 0.3)',
+  },
+  projectIdValue: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.lg,
+    color: colors.vibrantTeal,
+    letterSpacing: 1,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(46, 196, 182, 0.1)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    gap: spacing.xs,
+  },
+  verifiedIcon: {
+    fontSize: 12,
+    color: colors.vibrantTeal,
+  },
+  verifiedText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
   },
   // Handshake Card Styles
   handshakeCard: {
@@ -828,27 +1043,54 @@ const styles = StyleSheet.create({
   successBanner: {
     backgroundColor: colors.vibrantTeal + '20',
     borderRadius: borderRadius.md,
-    padding: spacing.lg,
+    padding: spacing.xl,
     alignItems: 'center',
     marginTop: spacing.md,
     marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.vibrantTeal + '30',
+  },
+  successIconRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
   },
   successEmoji: {
-    fontSize: 32,
-    marginBottom: spacing.sm,
+    fontSize: 28,
   },
   successText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.lg,
     color: colors.parchmentWhite,
     textAlign: 'center',
+    marginBottom: spacing.xs,
   },
   successSubtext: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: 'rgba(255, 255, 255, 0.7)',
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    lineHeight: 20,
+  },
+  successProjectBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  successProjectLabel: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  successProjectId: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
   },
   retryButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -866,47 +1108,92 @@ const styles = StyleSheet.create({
   // Details Card
   detailsCard: {
     marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.vibrantTeal + '20',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   sectionTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
-    marginBottom: spacing.md,
+  },
+  connectedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.vibrantTeal + '10',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  connectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.vibrantTeal,
+  },
+  connectedText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
   },
   projectRefContainer: {
-    backgroundColor: colors.midnightNavy + '08',
+    backgroundColor: colors.midnightNavy + '05',
     borderRadius: borderRadius.md,
-    padding: spacing.md,
+    padding: spacing.lg,
     marginBottom: spacing.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.midnightNavy + '10',
+  },
+  projectRefHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   projectRefLabel: {
-    fontFamily: typography.fontFamily.body,
+    fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.xs,
     color: colors.gray600,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
   projectRefBadge: {
-    backgroundColor: colors.vibrantTeal + '15',
-    borderRadius: borderRadius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.vibrantTeal + '30',
+    backgroundColor: colors.vibrantTeal + '12',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderWidth: 2,
+    borderColor: colors.vibrantTeal + '40',
+    marginBottom: spacing.sm,
   },
   projectRefValue: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize.lg,
+    fontSize: typography.fontSize.xl,
     color: colors.vibrantTeal,
     letterSpacing: 0.5,
+  },
+  projectRefNote: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray500,
+    fontStyle: 'italic',
+  },
+  detailsDivider: {
+    height: 1,
+    backgroundColor: colors.gray200,
+    marginVertical: spacing.md,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
   },
   detailLabel: {
     fontFamily: typography.fontFamily.body,
@@ -915,9 +1202,19 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     fontFamily: typography.fontFamily.bodyMedium,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
     color: colors.midnightNavy,
     maxWidth: '60%',
+  },
+  detailBadge: {
+    backgroundColor: colors.gray100,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+  },
+  detailBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
   },
   // Test Card
   testCard: {

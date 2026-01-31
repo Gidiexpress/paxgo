@@ -155,8 +155,8 @@ function MasonryCard({ proof, height, index, onPress }: MasonryCardProps) {
 export function ProofWallMasonry({ proofs, onProofPress, onAddProof }: ProofWallMasonryProps) {
   // Distribute proofs into two columns for masonry layout
   const { leftColumn, rightColumn } = useMemo(() => {
-    const left: Array<{ proof: ProofEntry; height: number; originalIndex: number }> = [];
-    const right: Array<{ proof: ProofEntry; height: number; originalIndex: number }> = [];
+    const left: { proof: ProofEntry; height: number; originalIndex: number }[] = [];
+    const right: { proof: ProofEntry; height: number; originalIndex: number }[] = [];
     let leftHeight = 0;
     let rightHeight = 0;
 
