@@ -101,7 +101,7 @@ export default function NewDreamDialogueScreen() {
       const welcomeMessage: Message = {
         id: '1',
         role: 'assistant',
-        content: `Hey there! 🌟 I&apos;m so excited to dive into your ${category?.title.toLowerCase()} dream with you.\n\nYou said: "${dream.title}"\n\nLet&apos;s uncover your deepest motivation using the Five Whys technique. I&apos;ll ask "why" five times to help you discover what truly drives this dream.\n\n**Why is this dream important to you?**`,
+        content: `Hey there! 🌟 I&apos;m so excited to dive into your ${category?.title.toLowerCase()} dream with you.\n\nYou said: "${dream.title}"\n\nLet&apos;s explore what this dream really means to you. I want to understand what truly drives this - the deeper "why" beneath the surface.\n\n**Why is this dream important to you?**`,
       };
       setMessages([welcomeMessage]);
     }
@@ -139,30 +139,34 @@ export default function NewDreamDialogueScreen() {
     // Generate AI response
     const prompt =
       newWhyCount < 5
-        ? `You are Gabby, a warm and insightful mindset coach helping someone discover their core motivation through the Five Whys technique.
+        ? `You are Gabby, a warm and sophisticated mindset coach having a deep conversation to uncover someone's core motivation.
 
 Current dream: "${dream.title}" (${category?.title})
-We are on Why #${newWhyCount} of 5.
+Conversation depth: ${newWhyCount} layers deep
 
 The user just answered: "${inputText.trim()}"
 
+CRITICAL: Do NOT mention "Five Whys" or any technique. Do NOT say how many questions you'll ask. Do NOT mention steps or methodology.
+
 Respond with:
 1. A brief, empathetic acknowledgment of their answer (1 sentence)
-2. Then ask "Why is that important to you?" in a warm, curious way
+2. Then naturally ask "Why is that important to you?" or a variation
 
-Keep your response under 80 words. Be encouraging but dig deeper. Use 1-2 relevant emojis.`
-        : `You are Gabby, completing the Five Whys technique.
+Keep your response under 80 words. Be encouraging but dig deeper naturally. Use 1-2 relevant emojis.`
+        : `You are Gabby, reaching the heart of a profound conversation about someone's motivation.
 
 Dream: "${dream.title}" (${category?.title})
-Final answer (Why #5): "${inputText.trim()}"
+Their deepest answer: "${inputText.trim()}"
 
-Based on this journey, synthesize their CORE MOTIVATION in a powerful, personal statement.
+CRITICAL: Do NOT mention "Five Whys" or reference the process. Do NOT say "we've completed" or mention techniques.
+
+Based on this conversation, synthesize their CORE MOTIVATION in a powerful, personal statement.
 
 Respond with:
 1. A warm acknowledgment that you've reached the heart of their motivation
 2. Their core motivation as a clear, inspiring statement (in quotes)
 3. A brief explanation of how understanding this will fuel their journey
-4. End with excitement about starting their first action
+4. End with excitement about turning this into action
 
 Format the core motivation clearly. Keep total response under 120 words. Use emojis sparingly.`;
 

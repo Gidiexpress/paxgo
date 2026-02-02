@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '@fastshot/auth';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -18,6 +19,7 @@ const { width, height } = Dimensions.get('window');
 
 export default function JourneySplashScreen() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [showContent, setShowContent] = useState(false);
 
   // Animation values
@@ -71,11 +73,17 @@ export default function JourneySplashScreen() {
 
     // Navigate after animation
     const timer = setTimeout(() => {
-      router.replace('/journey/stuck-point');
+      // If user is already authenticated, skip onboarding collection and go to chat
+      if (isAuthenticated) {
+        router.replace('/journey/five-whys-chat');
+      } else {
+        // Not authenticated, start onboarding collection
+        router.replace('/journey/stuck-point');
+      }
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAuthenticated]);
 
   const logoStyle = useAnimatedStyle(() => ({
     opacity: logoOpacity.value,

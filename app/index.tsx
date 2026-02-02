@@ -1,15 +1,50 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Redirect } from 'expo-router';
 import { colors } from '@/constants/theme';
-import { useOnboarding } from '@/hooks/useStorage';
 import { useAuth } from '@fastshot/auth';
+import { supabase } from '@/lib/supabase';
 
 export default function Index() {
-  const { isComplete, loading: onboardingLoading } = useOnboarding();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+  const [onboardingComplete, setOnboardingComplete] = useState<boolean | null>(null);
+  const [checking, setChecking] = useState(true);
 
-  if (onboardingLoading || authLoading) {
+  useEffect(() => {
+    async function checkOnboardingStatus() {
+      if (isAuthenticated && user?.id) {
+        try {
+          // Check if user has completed onboarding in the database
+          const { data, error } = await supabase
+            .from('users')
+            .select('onboarding_completed')
+            .eq('id', user.id)
+            .single();
+
+          if (data) {
+            setOnboardingComplete(data.onboarding_completed || false);
+          } else {
+            // User profile doesn't exist yet, onboarding not complete
+            setOnboardingComplete(false);
+          }
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
+          setOnboardingComplete(false);
+        }
+      }
+      setChecking(false);
+    }
+
+    if (!authLoading) {
+      if (isAuthenticated) {
+        checkOnboardingStatus();
+      } else {
+        setChecking(false);
+      }
+    }
+  }, [isAuthenticated, authLoading, user]);
+
+  if (authLoading || checking) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.boldTerracotta} />
@@ -17,18 +52,17 @@ export default function Index() {
     );
   }
 
-  // If user has completed onboarding and is authenticated, go to main app
-  if (isComplete && isAuthenticated) {
+  // Authenticated users who completed onboarding → main app
+  if (isAuthenticated && onboardingComplete) {
     return <Redirect href="/(tabs)" />;
   }
 
-  // If user has completed journey onboarding (checked via flag in storage)
-  // but not the old onboarding, still go to main app if authenticated
-  if (isAuthenticated) {
-    return <Redirect href="/(tabs)" />;
+  // Authenticated users who haven't completed onboarding → five whys chat
+  if (isAuthenticated && onboardingComplete === false) {
+    return <Redirect href="/journey/five-whys-chat" />;
   }
 
-  // New users go to the A-Z journey flow
+  // Not authenticated users → journey flow (which leads to auth)
   return <Redirect href="/journey" />;
 }
 
