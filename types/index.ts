@@ -49,6 +49,15 @@ export interface ProofEntry {
   hashtags: string[];
   reactions: string[];
   filter?: string;
+  // Obsidian Vault enhancements
+  voiceNoteUri?: string; // Voice recording file path
+  voiceTranscript?: string; // AI transcription
+  voiceSummary?: string; // AI summary for Daily Reflection
+  aiVisionComment?: string; // Gabby's AI analysis of photo
+  signatureData?: string; // SVG path data for signature
+  category?: 'action' | 'insight' | 'milestone'; // For glow colors
+  isSealed?: boolean; // Has been sealed into vault
+  sealedAt?: string; // When it was sealed
 }
 
 export interface ChatMessage {

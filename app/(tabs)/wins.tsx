@@ -297,6 +297,29 @@ export default function WinsScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Obsidian Vault Link */}
+          <TouchableOpacity
+            style={styles.vaultLink}
+            onPress={() => router.push('/vault')}
+            activeOpacity={0.9}
+          >
+            <LinearGradient
+              colors={['#1A1A2E', '#16213E']}
+              style={styles.vaultLinkGradient}
+            >
+              <View style={styles.vaultLinkContent}>
+                <Text style={styles.vaultLinkIcon}>🔒</Text>
+                <View style={styles.vaultLinkText}>
+                  <Text style={styles.vaultLinkTitle}>Obsidian Vault</Text>
+                  <Text style={styles.vaultLinkSubtitle}>
+                    Archive of sealed achievements
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.vaultLinkArrow}>›</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
           {/* Archive Link */}
           <TouchableOpacity
             style={[styles.archiveLink, !isPremium && styles.archiveLinkLocked]}
@@ -879,6 +902,45 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: 24,
     color: colors.gray400,
+  },
+  // Vault Link Styles
+  vaultLink: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.lg,
+  },
+  vaultLinkGradient: {
+    padding: spacing.lg,
+  },
+  vaultLinkContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  vaultLinkIcon: {
+    fontSize: 32,
+    marginRight: spacing.md,
+  },
+  vaultLinkText: {
+    flex: 1,
+  },
+  vaultLinkTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.champagneGold,
+  },
+  vaultLinkSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 2,
+  },
+  vaultLinkArrow: {
+    position: 'absolute',
+    right: spacing.lg,
+    fontFamily: typography.fontFamily.body,
+    fontSize: 24,
+    color: colors.champagneGold,
   },
   // Permission Slips Section Styles
   permissionSlipsSection: {
