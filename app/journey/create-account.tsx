@@ -181,21 +181,9 @@ export default function CreateAccountScreen() {
       clearError();
       if (authMode === 'email-signup') {
         showInfo('Creating your account...', { duration: 3000 });
-        const result = await signUpWithEmail(email, password);
-
-        if (result.emailConfirmationRequired) {
-          showSuccess(`Verification email sent to ${email}`, {
-            icon: '✉️',
-            duration: 5000,
-          });
-          // Switch to sign-in mode after showing the message
-          setTimeout(() => {
-            setAuthMode('email-signin');
-            setPassword('');
-            setConfirmPassword('');
-          }, 1500);
-        }
-        // If no email confirmation required, the auth state listener will handle navigation
+        await signUpWithEmail(email, password);
+        // If no email confirmation required, navigation handled by auth state listener
+        // If email confirmation required, user sees the verification message below
       } else {
         showInfo('Signing you in...', { duration: 2000 });
         await signInWithEmail(email, password);
