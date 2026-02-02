@@ -35,7 +35,7 @@ export async function uploadImage(
 
     // Read the file as base64
     const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: 'base64' as FileSystem.EncodingType,
+      encoding: 'base64',
     });
 
     // Convert base64 to Uint8Array

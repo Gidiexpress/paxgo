@@ -603,8 +603,8 @@ export default function CreateAccountScreen() {
             <Text style={styles.icon}>✓</Text>
           </LinearGradient>
         </View>
-        <Text style={styles.manualContinueTitle}>You're all set!</Text>
-        <Text style={styles.manualContinueText}>Let's continue to your journey</Text>
+        <Text style={styles.manualContinueTitle}>You&apos;re all set!</Text>
+        <Text style={styles.manualContinueText}>Let&apos;s continue to your journey</Text>
         <TouchableOpacity
           style={styles.manualContinueButton}
           onPress={() => {

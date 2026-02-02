@@ -311,7 +311,7 @@ export default function RoadmapScreen() {
                   <View style={styles.motivationDivider} />
                   <Text style={styles.motivationLabel}>Root Motivation</Text>
                   <Text style={styles.motivationText}>
-                    "{activeRoadmap.root_motivation}"
+                    &quot;{activeRoadmap.root_motivation}&quot;
                   </Text>
                 </>
               )}
