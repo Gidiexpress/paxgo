@@ -1089,3 +1089,101 @@ Respond with ONLY the tip text, no JSON or formatting:`;
     };
   }
 }
+
+// Break down a difficult action into 2-3 smaller, more manageable micro-steps
+export interface BreakdownActionResponse {
+  success: boolean;
+  actions?: RoadmapActionData[];
+  error?: string;
+}
+
+export async function breakDownAction(
+  difficultAction: RoadmapActionData,
+  dream: string,
+  rootMotivation?: string
+): Promise<BreakdownActionResponse> {
+  try {
+    const motivationContext = rootMotivation
+      ? `\n\nUser's root motivation: "${rootMotivation}"`
+      : '';
+
+    const prompt = `You are Gabby, a mindset coach who specializes in making big steps feel manageable. A user found this action too difficult and needs it broken down into smaller, gentler steps.
+
+DIFFICULT ACTION THAT FEELS TOO BIG:
+- Title: ${difficultAction.title}
+- Description: ${difficultAction.description}
+- Original Duration: ${difficultAction.duration_minutes} minutes
+- Category: ${difficultAction.category}
+
+USER'S DREAM: "${dream}"${motivationContext}
+
+YOUR TASK: Break this into 2-3 EVEN SMALLER micro-actions that:
+1. Together accomplish the same goal as the original action
+2. Each take 5-10 minutes max (shorter than the original)
+3. Feel less intimidating and more approachable
+4. Build on each other sequentially
+5. Maintain the luxurious, supportive language style
+
+The first action should be the EASIEST possible first step. The final action should complete what the original intended.
+
+Respond ONLY with valid JSON:
+{
+  "actions": [
+    {
+      "title": "...",
+      "description": "...",
+      "why_it_matters": "...",
+      "duration_minutes": 5,
+      "gabby_tip": "...",
+      "category": "${difficultAction.category}",
+      "order_index": ${difficultAction.order_index}
+    }
+  ]
+}
+
+NOTE: The first action gets order_index ${difficultAction.order_index}, increment for each subsequent action.`;
+
+    const response = await generateText({ prompt });
+
+    const jsonMatch = response?.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const data = JSON.parse(jsonMatch[0]);
+      return {
+        success: true,
+        actions: data.actions || [],
+      };
+    }
+
+    // Fallback: Create simpler versions
+    const baseIndex = difficultAction.order_index;
+    return {
+      success: true,
+      actions: [
+        {
+          title: `Prepare for: ${difficultAction.title}`,
+          description: 'Take 5 minutes to gather any materials or information you might need. Just collect, don\'t act yet.',
+          why_it_matters: difficultAction.why_it_matters,
+          duration_minutes: 5,
+          gabby_tip: 'Start small. Preparation is progress too.',
+          category: difficultAction.category,
+          order_index: baseIndex,
+        },
+        {
+          title: `Begin gently: ${difficultAction.title}`,
+          description: 'Take just the first small step of this action. Stop after 5 minutes, even if you\'re not done.',
+          why_it_matters: difficultAction.why_it_matters,
+          duration_minutes: 5,
+          gabby_tip: 'Progress over perfection. Any step forward counts.',
+          category: difficultAction.category,
+          order_index: baseIndex + 1,
+        },
+      ],
+    };
+  } catch (error) {
+    console.error('Action breakdown error:', error);
+    return {
+      success: false,
+      error: 'Unable to break down this action. Please try again.',
+    };
+  }
+}

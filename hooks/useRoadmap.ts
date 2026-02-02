@@ -12,6 +12,7 @@ import {
 import {
   generateRoadmapActions,
   refineRoadmapAction,
+  breakDownAction,
   RoadmapActionData,
 } from '@/services/aiService';
 
@@ -430,6 +431,99 @@ export function useRoadmap() {
   const completedCount = activeRoadmap?.actions.filter((a) => a.is_completed).length || 0;
   const totalCount = activeRoadmap?.actions.length || 0;
 
+  // Break down a difficult action into smaller steps
+  const breakDownActionIntoSteps = useCallback(
+    async (actionId: string) => {
+      if (!activeRoadmap) return null;
+
+      const action = activeRoadmap.actions.find((a) => a.id === actionId);
+      if (!action) return null;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const currentActionData: RoadmapActionData = {
+          title: action.title,
+          description: action.description || '',
+          why_it_matters: action.why_it_matters || '',
+          duration_minutes: action.duration_minutes || 15,
+          gabby_tip: action.gabby_tip || '',
+          category: (action.category as RoadmapActionData['category']) || 'action',
+          order_index: action.order_index,
+        };
+
+        const result = await breakDownAction(
+          currentActionData,
+          activeRoadmap.dream,
+          activeRoadmap.root_motivation || undefined
+        );
+
+        if (!result.success || !result.actions || result.actions.length === 0) {
+          throw new Error(result.error || 'Failed to break down action');
+        }
+
+        // Delete the original action
+        const { error: deleteError } = await supabase
+          .from('roadmap_actions')
+          .delete()
+          .eq('id', actionId);
+
+        if (deleteError) throw deleteError;
+
+        // Adjust order_index for actions after the deleted one
+        const actionsAfterDeleted = activeRoadmap.actions.filter(
+          (a) => a.order_index > action.order_index
+        );
+
+        // Shift subsequent actions down by the number of new actions
+        const newActionsCount = result.actions.length;
+        const shiftAmount = newActionsCount - 1; // -1 because we're replacing 1 action
+
+        if (shiftAmount > 0 && actionsAfterDeleted.length > 0) {
+          for (const laterAction of actionsAfterDeleted) {
+            await supabase
+              .from('roadmap_actions')
+              .update({ order_index: laterAction.order_index + shiftAmount })
+              .eq('id', laterAction.id);
+          }
+        }
+
+        // Insert the new broken-down actions
+        const actionsToInsert: RoadmapActionInsert[] = result.actions.map((newAction) => ({
+          roadmap_id: activeRoadmap.id,
+          title: newAction.title,
+          description: newAction.description,
+          why_it_matters: newAction.why_it_matters,
+          duration_minutes: newAction.duration_minutes,
+          order_index: newAction.order_index,
+          is_completed: false,
+          gabby_tip: newAction.gabby_tip,
+          category: newAction.category,
+        }));
+
+        const { data: newActionsData, error: insertError } = await supabase
+          .from('roadmap_actions')
+          .insert(actionsToInsert)
+          .select();
+
+        if (insertError) throw insertError;
+
+        // Refresh roadmaps to get updated state
+        await fetchRoadmaps();
+
+        return newActionsData || [];
+      } catch (err) {
+        console.error('Error breaking down action:', err);
+        setError('Failed to break down action. Please try again.');
+        return null;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeRoadmap, fetchRoadmaps]
+  );
+
   return {
     // State
     roadmaps,
@@ -446,6 +540,7 @@ export function useRoadmap() {
     completeAction,
     uncompleteAction,
     refineAction,
+    breakDownActionIntoSteps,
     updateRoadmapStatus,
     archiveRoadmap,
     deleteRoadmap,

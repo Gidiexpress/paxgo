@@ -27,11 +27,13 @@ import { colors, typography, spacing, shadows, borderRadius } from '@/constants/
 import { useRoadmap } from '@/hooks/useRoadmap';
 import { useUser, useProofs } from '@/hooks/useStorage';
 import { RoadmapAction } from '@/types/database';
+import { useSnackbar } from '@/contexts/SnackbarContext';
 import { RoadmapActionCard } from '@/components/roadmap/RoadmapActionCard';
 import { FocusModeModal } from '@/components/roadmap/FocusModeModal';
 import { GoldConfetti, CelebrationOverlay } from '@/components/roadmap/GoldConfetti';
 import { FullTimeline } from '@/components/roadmap/GoldenPathTimeline';
 import { Button } from '@/components/ui/Button';
+import { WeavingAnimation } from '@/components/roadmap/WeavingAnimation';
 
 export default function RoadmapScreen() {
   const router = useRouter();
@@ -40,6 +42,7 @@ export default function RoadmapScreen() {
 
   const { user } = useUser();
   const { hasProofForAction } = useProofs();
+  const { showSuccess, showInfo, showError } = useSnackbar();
   const {
     activeRoadmap,
     loading,
@@ -50,6 +53,7 @@ export default function RoadmapScreen() {
     createRoadmap,
     completeAction,
     refineAction,
+    breakDownActionIntoSteps,
     fetchRoadmaps,
   } = useRoadmap();
 
@@ -58,6 +62,7 @@ export default function RoadmapScreen() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [isBreakingDown, setIsBreakingDown] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -105,16 +110,31 @@ export default function RoadmapScreen() {
     if (success) {
       // Determine celebration message
       const newCompletedCount = completedCount + 1;
+      const action = activeRoadmap?.actions.find((a) => a.id === actionId);
 
+      let celebrationMsg = 'Keep going!';
       if (newCompletedCount === totalCount) {
-        setCelebrationMessage('Roadmap Complete!');
+        celebrationMsg = 'Roadmap Complete!';
       } else if (newCompletedCount === 1) {
-        setCelebrationMessage('First step taken!');
-      } else {
-        setCelebrationMessage('Keep going!');
+        celebrationMsg = 'First step taken!';
       }
 
+      setCelebrationMessage(celebrationMsg);
       setShowCelebration(true);
+
+      // Show top snackbar with personalized encouragement
+      const encouragements = [
+        `Beautiful work! ${action?.title} complete ✨`,
+        `You're on fire! ${newCompletedCount} down, ${totalCount - newCompletedCount} to go 🔥`,
+        `That's the spirit! Momentum is building 💫`,
+        `One step closer to your dream! Keep shining ✨`,
+      ];
+
+      const randomEncouragement = encouragements[Math.floor(Math.random() * encouragements.length)];
+      showSuccess(randomEncouragement, {
+        duration: 3500,
+        icon: '🎉',
+      });
 
       // Close focus mode after brief delay
       setTimeout(() => {
@@ -129,6 +149,31 @@ export default function RoadmapScreen() {
     await refineAction(actionId, feedback);
     setIsRefining(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showSuccess('Action refined! Gabby made it feel just right ✨', {
+      duration: 3000,
+    });
+  };
+
+  const handleBreakDown = async (actionId: string) => {
+    setIsBreakingDown(true);
+    showInfo('Breaking it down into smaller steps...', {
+      duration: 2000,
+      icon: '🔻',
+    });
+
+    const result = await breakDownActionIntoSteps(actionId);
+    setIsBreakingDown(false);
+
+    if (result && result.length > 0) {
+      showSuccess(`Split into ${result.length} gentler steps! You've got this 💪`, {
+        duration: 3500,
+        icon: '✨',
+      });
+      setShowFocusMode(false);
+      setSelectedAction(null);
+    } else {
+      showError('Unable to break down this action. Please try again.');
+    }
   };
 
   const handleCaptureProof = (actionId: string) => {
@@ -157,26 +202,14 @@ export default function RoadmapScreen() {
 
   const activeIndex = activeRoadmap?.actions.findIndex((a) => !a.is_completed) ?? 0;
 
-  // Loading state
+  // Loading state - Weaving animation
   if (loading || isGenerating) {
     return (
       <View style={styles.loadingContainer}>
-        <LinearGradient
-          colors={[colors.midnightNavy, colors.navyLight]}
-          style={StyleSheet.absoluteFill}
+        <WeavingAnimation
+          message={isGenerating ? 'Crafting your Golden Path...' : 'Loading your journey...'}
+          submessage="Gabby is weaving your personalized strategy"
         />
-        <Animated.View entering={FadeIn} style={styles.loadingContent}>
-          <View style={styles.loadingIcon}>
-            <Text style={styles.loadingEmoji}>✨</Text>
-          </View>
-          <ActivityIndicator size="large" color={colors.champagneGold} />
-          <Text style={styles.loadingText}>
-            {isGenerating ? 'Crafting your Golden Path...' : 'Loading your journey...'}
-          </Text>
-          <Text style={styles.loadingSubtext}>
-            Gabby is designing your personalized roadmap
-          </Text>
-        </Animated.View>
       </View>
     );
   }
@@ -359,8 +392,10 @@ export default function RoadmapScreen() {
         }}
         onComplete={handleComplete}
         onRefine={handleRefine}
+        onBreakDown={handleBreakDown}
         onCaptureProof={handleCaptureProof}
         isRefining={isRefining}
+        isBreakingDown={isBreakingDown}
         hasProof={selectedAction ? hasProofForAction(selectedAction.id) : false}
       />
 

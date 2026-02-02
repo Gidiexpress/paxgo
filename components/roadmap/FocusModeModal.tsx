@@ -31,8 +31,10 @@ interface FocusModeModalProps {
   onClose: () => void;
   onComplete: (actionId: string) => void;
   onRefine: (actionId: string, feedback?: string) => void;
+  onBreakDown: (actionId: string) => void;
   onCaptureProof: (actionId: string) => void;
   isRefining?: boolean;
+  isBreakingDown?: boolean;
   hasProof?: boolean;
 }
 
@@ -50,8 +52,10 @@ export function FocusModeModal({
   onClose,
   onComplete,
   onRefine,
+  onBreakDown,
   onCaptureProof,
   isRefining = false,
+  isBreakingDown = false,
   hasProof = false,
 }: FocusModeModalProps) {
   const insets = useSafeAreaInsets();
@@ -81,6 +85,11 @@ export function FocusModeModal({
   const handleCaptureProof = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onCaptureProof(action.id);
+  };
+
+  const handleBreakDown = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    onBreakDown(action.id);
   };
 
   return (
@@ -229,23 +238,41 @@ export function FocusModeModal({
                 </>
               ) : (
                 <>
-                  {/* Refine with Gabby */}
-                  <TouchableOpacity
-                    onPress={handleRefine}
-                    style={styles.refineButton}
-                    disabled={isRefining}
-                  >
-                    {isRefining ? (
-                      <ActivityIndicator size="small" color={colors.boldTerracotta} />
-                    ) : (
-                      <>
-                        <Text style={styles.refineIcon}>✨</Text>
-                        <Text style={styles.refineText}>
-                          {showRefineInput ? 'Send to Gabby' : 'Refine with Gabby'}
-                        </Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  <View style={styles.secondaryActions}>
+                    {/* Break It Down */}
+                    <TouchableOpacity
+                      onPress={handleBreakDown}
+                      style={styles.breakDownButton}
+                      disabled={isBreakingDown}
+                    >
+                      {isBreakingDown ? (
+                        <ActivityIndicator size="small" color={colors.vibrantTeal} />
+                      ) : (
+                        <>
+                          <Text style={styles.breakDownIcon}>🔻</Text>
+                          <Text style={styles.breakDownText}>Break It Down</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+
+                    {/* Refine with Gabby */}
+                    <TouchableOpacity
+                      onPress={handleRefine}
+                      style={styles.refineButton}
+                      disabled={isRefining}
+                    >
+                      {isRefining ? (
+                        <ActivityIndicator size="small" color={colors.boldTerracotta} />
+                      ) : (
+                        <>
+                          <Text style={styles.refineIcon}>✨</Text>
+                          <Text style={styles.refineText}>
+                            {showRefineInput ? 'Send to Gabby' : 'Refine'}
+                          </Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
 
                   {/* Complete Button */}
                   <TouchableOpacity
@@ -465,15 +492,40 @@ const styles = StyleSheet.create({
     borderTopColor: colors.gray200,
     gap: spacing.md,
   },
-  refineButton: {
+  secondaryActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  breakDownButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
-    gap: spacing.sm,
+    backgroundColor: colors.vibrantTeal + '15',
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
+  },
+  breakDownIcon: {
+    fontSize: 14,
+  },
+  breakDownText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.vibrantTeal,
+  },
+  refineButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    backgroundColor: colors.boldTerracotta + '10',
+    borderRadius: borderRadius.lg,
+    gap: spacing.xs,
   },
   refineIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
   refineText: {
     fontFamily: typography.fontFamily.bodySemiBold,
