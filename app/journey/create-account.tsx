@@ -54,10 +54,13 @@ export default function CreateAccountScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showManualContinue, setShowManualContinue] = useState(false);
 
   // Handle navigation after successful authentication
   const handleAuthSuccess = useCallback(() => {
     if (isNavigating) return;
+
+    console.log('🎉 Authentication successful, navigating to processing-path...');
     setIsNavigating(true);
 
     showSuccess('Welcome! Let\'s continue your journey', {
@@ -68,16 +71,32 @@ export default function CreateAccountScreen() {
     // Small delay to show the snackbar before navigating
     // Navigate to processing-path for the seamless transition experience
     setTimeout(() => {
+      console.log('Navigating to /journey/processing-path');
       router.replace('/journey/processing-path');
     }, 300);
   }, [isNavigating, router, showSuccess]);
 
   // Watch for authentication state changes
   useEffect(() => {
+    console.log('Auth state:', { isAuthenticated, isLoading, isNavigating });
+
     if (isAuthenticated && !isLoading && !isNavigating) {
+      console.log('Triggering handleAuthSuccess...');
       handleAuthSuccess();
     }
   }, [isAuthenticated, isLoading, isNavigating, handleAuthSuccess]);
+
+  // Safety net: Show manual continue button if authenticated but not navigating
+  useEffect(() => {
+    if (isAuthenticated && !isLoading && !isNavigating) {
+      const timer = setTimeout(() => {
+        console.log('Manual continue button shown as fallback');
+        setShowManualContinue(true);
+      }, 3000); // Show after 3 seconds if automatic navigation didn't work
+
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, isLoading, isNavigating]);
 
   // Show error from URL params (from OAuth callback)
   useEffect(() => {
@@ -98,16 +117,22 @@ export default function CreateAccountScreen() {
 
     // Handle specific error cases
     if (error.message?.includes('Invalid login credentials')) {
-      showError('Invalid email or password. Please try again.', {
-        action: {
-          label: 'Reset',
-          onPress: () => {
-            clearError();
-            setAuthMode('forgot-password');
+      // Only show this error if we're in sign-in mode
+      // Sign-up errors are handled separately in handleEmailSubmit
+      if (authMode === 'email-signin') {
+        showError('Invalid email or password. Please try again.', {
+          action: {
+            label: 'Reset',
+            onPress: () => {
+              clearError();
+              setAuthMode('forgot-password');
+            },
           },
-        },
-        duration: 6000,
-      });
+          duration: 6000,
+        });
+      } else {
+        clearError(); // Clear error for sign-up, handled in submit function
+      }
     } else if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
       // Handle existing user gracefully - offer to sign in
       showInfo('Account exists! Try signing in instead.', {
@@ -121,12 +146,25 @@ export default function CreateAccountScreen() {
         },
         duration: 6000,
       });
+    } else if (error.message?.includes('Email not confirmed')) {
+      // Email confirmation is still enabled in Supabase
+      showError(
+        'Email confirmation is required. Please check your email for the verification link.',
+        {
+          icon: '📧',
+          duration: 8000,
+        }
+      );
     } else if (error.message?.includes('Email address') && error.message?.includes('invalid')) {
       showError('Please enter a valid email address');
+    } else if (error.message?.includes('rate limit')) {
+      showError('Too many attempts. Please wait a moment and try again.', {
+        duration: 6000,
+      });
     } else if (error.message) {
-      showError(error.message);
+      showError(error.message, { duration: 6000 });
     }
-  }, [error, clearError, showError, showInfo]);
+  }, [error, authMode, clearError, showError, showInfo]);
 
   const handleGoogleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -181,15 +219,50 @@ export default function CreateAccountScreen() {
       clearError();
       if (authMode === 'email-signup') {
         showInfo('Creating your account...', { duration: 3000 });
-        await signUpWithEmail(email, password);
-        // If no email confirmation required, navigation handled by auth state listener
-        // If email confirmation required, user sees the verification message below
+
+        try {
+          await signUpWithEmail(email, password);
+          // If no email confirmation required, navigation handled by auth state listener
+        } catch (signupError: any) {
+          console.error('Sign up error:', signupError);
+
+          // If sign-up fails with "Invalid login credentials", it might mean
+          // the account was created but auto-sign-in failed. Try manual sign-in.
+          if (signupError?.message?.includes('Invalid login credentials')) {
+            console.log('Auto-sign-in failed, attempting manual sign-in...');
+            showInfo('Signing you in...', { duration: 2000 });
+
+            // Wait a moment for the account to be fully created
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            try {
+              await signInWithEmail(email, password);
+              // Navigation will be handled by auth state listener
+            } catch (signinError: any) {
+              console.error('Manual sign-in error:', signinError);
+
+              // If sign-in also fails, the account might not exist yet
+              if (signinError?.message?.includes('Invalid login credentials')) {
+                showError(
+                  'Account created but sign-in failed. Please try signing in again.',
+                  { duration: 6000 }
+                );
+                // Switch to sign-in mode
+                setTimeout(() => setAuthMode('email-signin'), 1500);
+              } else {
+                throw signinError;
+              }
+            }
+          } else {
+            throw signupError;
+          }
+        }
       } else {
         showInfo('Signing you in...', { duration: 2000 });
         await signInWithEmail(email, password);
         // Navigation will be handled by the auth state listener
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Email auth error:', err);
       // Error handling is done by the error effect above
     }
@@ -509,6 +582,38 @@ export default function CreateAccountScreen() {
     );
   }
 
+  // Show manual continue option if authenticated but navigation hasn't triggered
+  if (showManualContinue && isAuthenticated) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { paddingTop: insets.top }]}>
+        <View style={styles.iconContainer}>
+          <LinearGradient
+            colors={[colors.champagneGold, colors.goldDark]}
+            style={styles.iconGradient}
+          >
+            <Text style={styles.icon}>✓</Text>
+          </LinearGradient>
+        </View>
+        <Text style={styles.manualContinueTitle}>You're all set!</Text>
+        <Text style={styles.manualContinueText}>Let's continue to your journey</Text>
+        <TouchableOpacity
+          style={styles.manualContinueButton}
+          onPress={() => {
+            setIsNavigating(true);
+            router.replace('/journey/processing-path');
+          }}
+        >
+          <LinearGradient
+            colors={[colors.boldTerracotta, colors.terracottaDark]}
+            style={styles.submitGradient}
+          >
+            <Text style={styles.submitText}>Continue →</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <KeyboardAvoidingView
@@ -596,6 +701,26 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xl,
     color: colors.midnightNavy,
     marginTop: spacing.xl,
+  },
+  manualContinueTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.midnightNavy,
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  manualContinueText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.gray600,
+    marginBottom: spacing['2xl'],
+    textAlign: 'center',
+  },
+  manualContinueButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    width: '80%',
+    ...shadows.md,
   },
   keyboardView: {
     flex: 1,
