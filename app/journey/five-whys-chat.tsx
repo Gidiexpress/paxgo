@@ -182,14 +182,46 @@ export default function FiveWhysChatScreen() {
         AsyncStorage.getItem('@boldmove_current_session'),
       ]);
 
-      const stuckPoint = stuckPointStr ? JSON.parse(stuckPointStr) : null;
+      // Parse stuck point - handle both plain string and JSON object
+      let stuckPoint = null;
+      if (stuckPointStr) {
+        try {
+          stuckPoint = JSON.parse(stuckPointStr);
+        } catch {
+          // If parsing fails, it's a plain string (category ID)
+          stuckPoint = { id: stuckPointStr };
+        }
+      }
+
       const dream = dreamStr || '';
-      const userData = userDataStr ? JSON.parse(userDataStr) : null;
+
+      // Parse user data - handle both plain string and JSON object
+      let userData = null;
+      if (userDataStr) {
+        try {
+          userData = JSON.parse(userDataStr);
+        } catch {
+          // If parsing fails, treat it as a name
+          userData = { name: userDataStr };
+        }
+      }
+
+      // Map category ID to a readable title if title is not available
+      const categoryTitleMap: Record<string, string> = {
+        'career': 'career growth',
+        'travel': 'travel & adventure',
+        'finance': 'financial freedom',
+        'creative': 'creative pursuits',
+        'wellness': 'wellness & habits',
+      };
+
+      const categoryId = stuckPoint?.id || 'personal-freedom';
+      const categoryTitle = stuckPoint?.title || categoryTitleMap[categoryId] || 'personal growth';
 
       const onboarding: OnboardingData = {
         name: userData?.name || user?.email?.split('@')[0] || 'Bold Explorer',
-        stuckPoint: stuckPoint?.id || 'personal-freedom',
-        stuckPointTitle: stuckPoint?.title || 'personal growth',
+        stuckPoint: categoryId,
+        stuckPointTitle: categoryTitle,
         dream: dream || 'achieving your dream',
       };
 
@@ -224,6 +256,12 @@ export default function FiveWhysChatScreen() {
       await generatePersonalizedGreeting(onboarding);
     } catch (error) {
       console.error('Failed to initialize chat:', error);
+
+      // Show error notification to user
+      showError('Having trouble loading your data. Starting with defaults...', {
+        duration: 4000,
+      });
+
       // Fallback initialization
       setOnboardingData({
         name: 'Bold Explorer',
@@ -272,11 +310,6 @@ export default function FiveWhysChatScreen() {
             if (retryCount < maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 1000));
             }
-          }
-        } else {
-          retryCount++;
-          if (retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
           }
         }
       }

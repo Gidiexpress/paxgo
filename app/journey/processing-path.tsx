@@ -72,9 +72,29 @@ export default function ProcessingPathScreen() {
         AsyncStorage.getItem('@boldmove_user'),
       ]);
 
-      const stuckPoint = stuckPointStr ? JSON.parse(stuckPointStr) : null;
+      // Parse stuck point - handle both plain string and JSON object
+      let stuckPoint = null;
+      if (stuckPointStr) {
+        try {
+          stuckPoint = JSON.parse(stuckPointStr);
+        } catch {
+          // If parsing fails, it's a plain string (category ID)
+          stuckPoint = { id: stuckPointStr };
+        }
+      }
+
       const dream = dreamStr || '';
-      const userData = userNameStr ? JSON.parse(userNameStr) : null;
+
+      // Parse user data - handle both plain string and JSON object
+      let userData = null;
+      if (userNameStr) {
+        try {
+          userData = JSON.parse(userNameStr);
+        } catch {
+          // If parsing fails, treat it as a name
+          userData = { name: userNameStr };
+        }
+      }
 
       console.log('📦 Onboarding data:', { stuckPoint: stuckPoint?.id, dream, userName: userData?.name });
 

@@ -152,8 +152,13 @@ export default function StuckPointScreen() {
 
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Store the selected category
-    await AsyncStorage.setItem('@boldmove_stuck_point', selectedCategory);
+    // Find the full category object
+    const category = CATEGORIES.find(cat => cat.id === selectedCategory);
+
+    // Store the full category object as JSON
+    if (category) {
+      await AsyncStorage.setItem('@boldmove_stuck_point', JSON.stringify(category));
+    }
 
     // Navigate to dream input
     router.push('/journey/dream-input');
