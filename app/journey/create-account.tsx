@@ -60,22 +60,21 @@ export default function CreateAccountScreen() {
   const handleAuthSuccess = useCallback(() => {
     if (isNavigating) return;
 
-    console.log('🎉 Authentication successful, navigating to processing-path...');
+    console.log('🎉 Authentication successful, navigating directly to coaching...');
     setIsNavigating(true);
 
-    showSuccess('Welcome! Let\'s continue your journey', {
-      icon: '🎉',
-      duration: 2500,
+    showSuccess('Welcome! Let\'s begin your journey', {
+      icon: '✨',
+      duration: 2000,
     });
 
     // Delay to ensure:
     // 1. The database trigger has created the user profile
-    // 2. The snackbar is visible to the user
-    // 3. Auth state is fully settled
+    // 2. Auth state is fully settled
     setTimeout(() => {
-      console.log('✅ Navigating to /journey/processing-path');
-      router.replace('/journey/processing-path');
-    }, 800); // Increased from 300ms to 800ms for trigger to complete
+      console.log('✅ Navigating to /journey/five-whys-chat');
+      router.replace('/journey/five-whys-chat');
+    }, 800); // Allow time for trigger to complete
   }, [isNavigating, router, showSuccess]);
 
   // Watch for authentication state changes
@@ -609,7 +608,7 @@ export default function CreateAccountScreen() {
           style={styles.manualContinueButton}
           onPress={() => {
             setIsNavigating(true);
-            router.replace('/journey/processing-path');
+            router.replace('/journey/five-whys-chat');
           }}
         >
           <LinearGradient

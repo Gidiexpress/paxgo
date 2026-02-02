@@ -77,7 +77,7 @@ export default function FiveWhysChatScreen() {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const { user } = useAuth();
-  const { showSuccess, showInfo, showError } = useSnackbar();
+  const { showSuccess, showError } = useSnackbar();
   const { generateText, isLoading: isAILoading } = useTextGeneration();
 
   // State
@@ -170,6 +170,10 @@ export default function FiveWhysChatScreen() {
 
   const initializeChat = async () => {
     try {
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+
       // Load onboarding data from AsyncStorage
       const [stuckPointStr, dreamStr, userDataStr, storedSessionId] = await Promise.all([
         AsyncStorage.getItem('@boldmove_stuck_point'),
@@ -191,9 +195,12 @@ export default function FiveWhysChatScreen() {
 
       setOnboardingData(onboarding);
 
+      // Transfer onboarding data to database
+      await transferOnboardingData(onboarding);
+
       // Use stored session or create new one
       let activeSessionId = storedSessionId;
-      if (!activeSessionId && user?.id) {
+      if (!activeSessionId) {
         // Create new session
         const { data: session, error } = await supabase
           .from('five_whys_sessions')
@@ -228,26 +235,114 @@ export default function FiveWhysChatScreen() {
     }
   };
 
+  const transferOnboardingData = async (onboarding: OnboardingData) => {
+    if (!user?.id) return;
+
+    try {
+      console.log('🔄 Transferring onboarding data to database...');
+
+      // Wait for user profile to exist (with retry logic)
+      let userProfileExists = false;
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      while (!userProfileExists && retryCount < maxRetries) {
+        const { data: existingUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+
+        if (existingUser) {
+          userProfileExists = true;
+        } else {
+          // Profile doesn't exist yet, create it manually
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: user.id,
+              name: onboarding.name,
+              onboarding_completed: false,
+            });
+
+          if (!insertError) {
+            userProfileExists = true;
+          } else {
+            retryCount++;
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+          }
+        } else {
+          retryCount++;
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+      }
+
+      if (!userProfileExists) {
+        throw new Error('Failed to create user profile');
+      }
+
+      // Update user profile with onboarding data
+      await supabase
+        .from('users')
+        .update({
+          name: onboarding.name,
+          stuck_point: onboarding.stuckPoint,
+          dream: onboarding.dream,
+          onboarding_completed: false,
+        })
+        .eq('id', user.id);
+
+      // Create or get active dream
+      const { data: existingDream } = await supabase
+        .from('dreams')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!existingDream && onboarding.dream) {
+        await supabase
+          .from('dreams')
+          .insert({
+            user_id: user.id,
+            title: onboarding.dream,
+            category: onboarding.stuckPoint || 'personal-growth',
+            is_active: true,
+          });
+      }
+
+      console.log('✅ Onboarding data transferred successfully');
+    } catch (error) {
+      console.error('❌ Failed to transfer onboarding data:', error);
+      // Continue anyway - the chat can still function
+    }
+  };
+
   const generatePersonalizedGreeting = async (onboarding: OnboardingData) => {
     try {
-      const prompt = `You are Gabby, a warm and sophisticated mindset coach. You're about to guide ${onboarding.name} through the "Five Whys" technique to uncover their deepest motivation.
+      const prompt = `You are Gabby, a warm and sophisticated mindset coach. You're starting a deep conversation with ${onboarding.name} to help them discover their true motivation.
 
-IMPORTANT CONTEXT - The user has already shared during onboarding:
+IMPORTANT CONTEXT - The user has already shared:
 - Their name: ${onboarding.name}
 - Their area of focus: ${onboarding.stuckPointTitle}
 - Their dream: "${onboarding.dream}"
 
-Generate a warm, personalized opening message that:
-1. Greets them by name warmly (not generic)
-2. Explicitly acknowledges their specific dream ("${onboarding.dream}")
-3. Shows you remember their focus area (${onboarding.stuckPointTitle})
-4. Briefly explains you'll explore 5 layers of "why" together
-5. Asks the FIRST "Why" question: Why does this dream matter to them?
+Generate a warm, natural opening message that:
+1. Greets them by name warmly
+2. Acknowledges their specific dream with genuine appreciation
+3. Shows you remember their focus area
+4. Begins the journey by asking: Why does this dream matter to them?
 
-TONE: Sophisticated yet warm, like a wise friend. NOT robotic or generic.
-LENGTH: 3-4 sentences max. End with the question.
+CRITICAL: Do NOT mention "Five Whys" or any technique. Do NOT say how many questions you'll ask. Just start the conversation naturally.
 
-DO NOT ask them to share their dream or goals - you already know them!`;
+TONE: Sophisticated yet warm, like a wise friend having coffee. NOT clinical or structured.
+LENGTH: 2-3 sentences. End with the question.
+
+DO NOT ask them to share their dream - you already know it!`;
 
       const response = await generateText(prompt);
 
@@ -281,7 +376,7 @@ DO NOT ask them to share their dream or goals - you already know them!`;
       {
         id: '1',
         role: 'assistant',
-        content: `Hi ${name}! I'm Gabby, and I'm so glad you're here. I can see you're working toward "${dream}" - that's beautiful. Let's explore the deeper "why" behind this dream together.\n\nI'll ask you five questions, each going deeper than the last. By the end, you'll have uncovered something powerful about yourself.\n\nSo tell me - why does this dream matter to you?`,
+        content: `Hi ${name}! I'm Gabby, and I'm so glad you're here. I can see you're working toward "${dream}" - that's beautiful.\n\nLet's explore what this dream really means to you. Tell me - why does this dream matter to you?`,
         whyNumber: 1,
         isGabbyGreeting: true,
       },
@@ -366,14 +461,6 @@ DO NOT ask them to share their dream or goals - you already know them!`;
 
         setMessages((prev) => [...prev, assistantMessage]);
         setCurrentWhyNumber(nextWhyNumber);
-
-        // Show milestone snackbar at certain points
-        if (nextWhyNumber === 3) {
-          showInfo('You\'re going deeper - beautiful insights emerging', {
-            icon: '✨',
-            duration: 3000,
-          });
-        }
       } else {
         // Five Whys complete - generate root motivation
         await handleFiveWhysComplete(userMessage);
@@ -431,25 +518,27 @@ DO NOT ask them to share their dream or goals - you already know them!`;
       }
 
       // Generate synthesis message
-      const synthesisPrompt = `You are Gabby. You've just completed a profound Five Whys journey with ${onboardingData?.name || 'someone'}.
+      const synthesisPrompt = `You are Gabby. You've just had a profound conversation with ${onboardingData?.name || 'someone'} about what truly drives them.
 
 Their dream: "${onboardingData?.dream || 'their dream'}"
-Their root motivation you've uncovered: "${motivation}"
+Their deepest motivation: "${motivation}"
 
-Write a powerful, celebratory synthesis (3-4 sentences max) that:
+Write a powerful, celebratory message (2-3 sentences) that:
 1. Celebrates this breakthrough moment
-2. Reflects back their root motivation in an affirming way
-3. Makes them feel seen and understood
-4. Sets up excitement for what comes next (their personalized roadmap)
+2. Reflects back their motivation in an affirming way
+3. Makes them feel truly seen and understood
+4. Creates excitement for turning this insight into action
 
-Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journey.`;
+CRITICAL: Do NOT mention "Five Whys" or reference the process. Do NOT say "we've completed" or "journey we've taken". Just speak to their insight naturally.
+
+Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
 
       const synthesis = await generateText(synthesisPrompt);
 
       const synthesisMessage: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: synthesis || `✨ Wow, ${onboardingData?.name || 'friend'}! What a journey we've taken together.\n\n"${motivation}"\n\nThis is your truth - the fire beneath your dream. Now let's turn this beautiful insight into your Golden Path of action.`,
+        content: synthesis || `✨ ${onboardingData?.name || 'Friend'}, what you've just uncovered is beautiful.\n\n"${motivation}"\n\nThis is your truth - the fire beneath your dream. Let's turn this insight into your path forward.`,
       };
 
       setMessages((prev) => [...prev, synthesisMessage]);
@@ -459,9 +548,8 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       // Premium success snackbar
-      showSuccess('Core Insight Unlocked: Your Golden Path is forming', {
-        icon: '✨',
-        duration: 4000,
+      showSuccess('Core insight unlocked ✨', {
+        duration: 3000,
       });
     } catch (error) {
       console.error('Failed to complete Five Whys:', error);
@@ -537,9 +625,9 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
       <Animated.View entering={FadeInDown.delay(100)} style={styles.progressSection}>
         <View style={styles.progressHeader}>
           <View style={styles.progressInfo}>
-            <Text style={styles.progressTitle}>The Five Whys</Text>
+            <Text style={styles.progressTitle}>Mindset Coaching</Text>
             <Text style={styles.progressSubtitle}>
-              {isComplete ? 'Journey Complete ✨' : `Discovering Why #${currentWhyNumber}`}
+              {isComplete ? 'Journey Complete ✨' : 'Exploring Your Motivation'}
             </Text>
           </View>
 
@@ -552,7 +640,7 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
           </Animated.View>
         </View>
 
-        {/* Progress bar */}
+        {/* Subtle progress bar without numbers */}
         <View style={styles.progressBar}>
           {[1, 2, 3, 4, 5].map((num) => (
             <View key={num} style={styles.progressSegmentContainer}>
@@ -562,18 +650,8 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
                   num <= currentWhyNumber && {
                     backgroundColor: getCurrentColor().primary,
                   },
-                  num === currentWhyNumber && styles.progressSegmentActive,
                 ]}
               />
-              {num === currentWhyNumber && !isComplete && (
-                <Animated.View
-                  style={[
-                    styles.progressSegmentGlow,
-                    progressGlowStyle,
-                    { backgroundColor: currentColor.primary },
-                  ]}
-                />
-              )}
             </View>
           ))}
         </View>
@@ -617,13 +695,6 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
           >
             {message.content}
           </Text>
-          {message.whyNumber && !isComplete && (
-            <View style={[styles.whyBadge, { backgroundColor: `${getCurrentColor().primary}20` }]}>
-              <Text style={[styles.whyBadgeText, { color: getCurrentColor().primary }]}>
-                Why #{message.whyNumber}
-              </Text>
-            </View>
-          )}
         </View>
       </Animated.View>
     );
@@ -660,7 +731,7 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved by their journe
           style={StyleSheet.absoluteFill}
         />
         <ActivityIndicator size="large" color={colors.vibrantTeal} />
-        <Text style={styles.loadingText}>Gabby is preparing your journey...</Text>
+        <Text style={styles.loadingText}>Starting your conversation with Gabby...</Text>
       </View>
     );
   }

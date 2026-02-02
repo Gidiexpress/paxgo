@@ -11,8 +11,8 @@ export default function Callback() {
     // Small delay to ensure database trigger has completed
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    console.log('✅ Navigating to processing-path');
-    router.replace('/journey/processing-path');
+    console.log('✅ Navigating directly to coaching chat');
+    router.replace('/journey/five-whys-chat');
   };
 
   return (
