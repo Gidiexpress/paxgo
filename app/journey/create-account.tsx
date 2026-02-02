@@ -68,12 +68,14 @@ export default function CreateAccountScreen() {
       duration: 2500,
     });
 
-    // Small delay to show the snackbar before navigating
-    // Navigate to processing-path for the seamless transition experience
+    // Delay to ensure:
+    // 1. The database trigger has created the user profile
+    // 2. The snackbar is visible to the user
+    // 3. Auth state is fully settled
     setTimeout(() => {
-      console.log('Navigating to /journey/processing-path');
+      console.log('✅ Navigating to /journey/processing-path');
       router.replace('/journey/processing-path');
-    }, 300);
+    }, 800); // Increased from 300ms to 800ms for trigger to complete
   }, [isNavigating, router, showSuccess]);
 
   // Watch for authentication state changes
@@ -218,28 +220,33 @@ export default function CreateAccountScreen() {
     try {
       clearError();
       if (authMode === 'email-signup') {
+        console.log('📝 Starting email sign-up for:', email);
         showInfo('Creating your account...', { duration: 3000 });
 
         try {
+          console.log('🔐 Calling signUpWithEmail...');
           await signUpWithEmail(email, password);
+          console.log('✅ Sign-up completed successfully');
           // If no email confirmation required, navigation handled by auth state listener
         } catch (signupError: any) {
-          console.error('Sign up error:', signupError);
+          console.error('❌ Sign up error:', signupError);
 
           // If sign-up fails with "Invalid login credentials", it might mean
           // the account was created but auto-sign-in failed. Try manual sign-in.
           if (signupError?.message?.includes('Invalid login credentials')) {
-            console.log('Auto-sign-in failed, attempting manual sign-in...');
+            console.log('⚠️ Auto-sign-in failed, attempting manual sign-in...');
             showInfo('Signing you in...', { duration: 2000 });
 
-            // Wait a moment for the account to be fully created
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait a moment for the account to be fully created and trigger to fire
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Increased from 500ms
 
             try {
+              console.log('🔐 Attempting manual sign-in...');
               await signInWithEmail(email, password);
+              console.log('✅ Manual sign-in successful');
               // Navigation will be handled by auth state listener
             } catch (signinError: any) {
-              console.error('Manual sign-in error:', signinError);
+              console.error('❌ Manual sign-in error:', signinError);
 
               // If sign-in also fails, the account might not exist yet
               if (signinError?.message?.includes('Invalid login credentials')) {
@@ -258,12 +265,14 @@ export default function CreateAccountScreen() {
           }
         }
       } else {
+        console.log('🔐 Starting email sign-in for:', email);
         showInfo('Signing you in...', { duration: 2000 });
         await signInWithEmail(email, password);
+        console.log('✅ Sign-in completed successfully');
         // Navigation will be handled by the auth state listener
       }
     } catch (err: any) {
-      console.error('Email auth error:', err);
+      console.error('💥 Email auth error:', err);
       // Error handling is done by the error effect above
     }
   };

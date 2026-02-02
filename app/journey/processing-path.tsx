@@ -57,7 +57,12 @@ export default function ProcessingPathScreen() {
 
   // Transfer onboarding data to database
   const transferOnboardingData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('❌ No user ID available');
+      return;
+    }
+
+    console.log('🔄 Starting data transfer for user:', user.id);
 
     try {
       // Get stored onboarding data
@@ -71,31 +76,91 @@ export default function ProcessingPathScreen() {
       const dream = dreamStr || '';
       const userData = userNameStr ? JSON.parse(userNameStr) : null;
 
-      // Upsert user profile in database
-      const { error: userError } = await supabase
+      console.log('📦 Onboarding data:', { stuckPoint: stuckPoint?.id, dream, userName: userData?.name });
+
+      // Wait for user profile to exist (with retry logic)
+      // The trigger should create it, but let's ensure it exists before proceeding
+      let userProfileExists = false;
+      let retryCount = 0;
+      const maxRetries = 5;
+
+      while (!userProfileExists && retryCount < maxRetries) {
+        console.log(`🔍 Checking if user profile exists (attempt ${retryCount + 1}/${maxRetries})...`);
+
+        const { data: existingUser, error: checkError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', user.id)
+          .single();
+
+        if (existingUser) {
+          console.log('✅ User profile found');
+          userProfileExists = true;
+        } else if (checkError?.code === 'PGRST116') {
+          // Profile doesn't exist yet, create it manually as fallback
+          console.log('⚠️ User profile not found, creating manually...');
+
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert({
+              id: user.id,
+              name: userData?.name || user.email?.split('@')[0] || 'Bold Explorer',
+              onboarding_completed: false,
+            });
+
+          if (!insertError) {
+            console.log('✅ User profile created manually');
+            userProfileExists = true;
+          } else {
+            console.error('❌ Error creating user profile:', insertError);
+            retryCount++;
+            if (retryCount < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            }
+          }
+        } else {
+          console.error('❌ Error checking user profile:', checkError);
+          retryCount++;
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+          }
+        }
+      }
+
+      if (!userProfileExists) {
+        throw new Error('Failed to create user profile after multiple attempts');
+      }
+
+      // Now update the user profile with onboarding data
+      console.log('📝 Updating user profile with onboarding data...');
+      const { error: updateError } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
+        .update({
           name: userData?.name || user.email?.split('@')[0] || 'Bold Explorer',
           stuck_point: stuckPoint?.id || stuckPoint?.title || null,
           dream: dream,
           onboarding_completed: false, // Will be set to true after 5 Whys
-        }, { onConflict: 'id' });
+        })
+        .eq('id', user.id);
 
-      if (userError) {
-        console.error('Error upserting user:', userError);
-        throw userError;
+      if (updateError) {
+        console.error('❌ Error updating user profile:', updateError);
+        throw updateError;
       }
 
+      console.log('✅ User profile updated successfully');
+
       // Create or get active dream
+      console.log('🔍 Checking for existing dream...');
       const { data: existingDream } = await supabase
         .from('dreams')
         .select('id')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
       if (!existingDream && dream) {
+        console.log('📝 Creating new dream...');
         const { error: dreamError } = await supabase
           .from('dreams')
           .insert({
@@ -106,11 +171,17 @@ export default function ProcessingPathScreen() {
           });
 
         if (dreamError) {
-          console.error('Error creating dream:', dreamError);
+          console.error('❌ Error creating dream:', dreamError);
+          // Don't throw - dream is optional
+        } else {
+          console.log('✅ Dream created successfully');
         }
+      } else if (existingDream) {
+        console.log('✅ Active dream already exists');
       }
 
       // Create a new Five Whys session
+      console.log('📝 Creating Five Whys session...');
       const { data: session, error: sessionError } = await supabase
         .from('five_whys_sessions')
         .insert({
@@ -122,18 +193,19 @@ export default function ProcessingPathScreen() {
         .single();
 
       if (sessionError) {
-        console.error('Error creating session:', sessionError);
-      }
-
-      // Store session ID for the chat
-      if (session) {
+        console.error('❌ Error creating session:', sessionError);
+        // Don't throw - we can create session later
+      } else {
+        console.log('✅ Five Whys session created:', session.id);
+        // Store session ID for the chat
         await AsyncStorage.setItem('@boldmove_current_session', session.id);
       }
 
+      console.log('🎉 Data transfer completed successfully');
       setIsTransferring(false);
-    } catch (error) {
-      console.error('Failed to transfer onboarding data:', error);
-      showError('Something went wrong. Please try again.');
+    } catch (error: any) {
+      console.error('💥 Failed to transfer onboarding data:', error);
+      showError(error.message || 'Something went wrong. Please try again.');
       setIsTransferring(false);
     }
   }, [user, showError]);
