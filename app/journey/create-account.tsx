@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@fastshot/auth';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useSnackbar } from '@/contexts/SnackbarContext';
+import { supabase } from '@/lib/supabase';
 import {
   colors,
   typography,
@@ -188,10 +189,27 @@ export default function CreateAccountScreen() {
     });
     try {
       clearError();
+      console.log('🔐 Starting Google sign-in...');
       await signInWithGoogle();
+      console.log('✅ Google sign-in completed');
+
+      // Wait for database trigger and check session
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('✅ Session created successfully');
+      } else {
+        console.log('⚠️ No session found after Google sign-in');
+        showError('Sign in was cancelled or failed. Please try again', {
+          icon: '⚠️',
+          duration: 4000,
+        });
+      }
       // Navigation will be handled by the auth state listener
     } catch (err) {
-      console.error('Google sign in error:', err);
+      console.error('❌ Google sign in error:', err);
+      // Error handling done by error effect
     }
   };
 
@@ -203,10 +221,27 @@ export default function CreateAccountScreen() {
     });
     try {
       clearError();
+      console.log('🔐 Starting Apple sign-in...');
       await signInWithApple();
+      console.log('✅ Apple sign-in completed');
+
+      // Wait for database trigger and check session
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log('✅ Session created successfully');
+      } else {
+        console.log('⚠️ No session found after Apple sign-in');
+        showError('Sign in was cancelled or failed. Please try again', {
+          icon: '⚠️',
+          duration: 4000,
+        });
+      }
       // Navigation will be handled by the auth state listener
     } catch (err) {
-      console.error('Apple sign in error:', err);
+      console.error('❌ Apple sign in error:', err);
+      // Error handling done by error effect
     }
   };
 
@@ -256,9 +291,43 @@ export default function CreateAccountScreen() {
 
         try {
           console.log('🔐 Calling signUpWithEmail...');
-          await signUpWithEmail(email, password);
-          console.log('✅ Sign-up completed successfully');
-          // If no email confirmation required, navigation handled by auth state listener
+          const signUpResult = await signUpWithEmail(email, password);
+          console.log('✅ Sign-up API call completed:', signUpResult);
+
+          // Wait for database trigger to complete and check auth state
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Check if we're actually authenticated now
+          // If not, this was likely a "repeated signup" - try signing in instead
+          const { data: { session } } = await supabase.auth.getSession();
+
+          if (!session) {
+            console.log('⚠️ Sign-up succeeded but no session created. Attempting sign-in instead...');
+            showInfo('Signing you in...', { duration: 2000 });
+
+            try {
+              console.log('🔐 Attempting sign-in...');
+              await signInWithEmail(email, password);
+              console.log('✅ Sign-in successful');
+              // Navigation will be handled by auth state listener
+            } catch (signinError: any) {
+              console.error('❌ Sign-in error:', signinError);
+
+              // If sign-in fails, the account might not exist or wrong password
+              if (signinError?.message?.includes('Invalid login credentials')) {
+                showError(
+                  'We couldn\'t sign you in. Please check your password or try again',
+                  {
+                    icon: '🔐',
+                    duration: 6000,
+                  }
+                );
+              } else {
+                throw signinError;
+              }
+            }
+          }
+          // If session exists, navigation will be handled by auth state listener
         } catch (signupError: any) {
           console.error('❌ Sign up error:', signupError);
 
@@ -269,7 +338,7 @@ export default function CreateAccountScreen() {
             showInfo('Signing you in...', { duration: 2000 });
 
             // Wait a moment for the account to be fully created and trigger to fire
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Increased from 500ms
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             try {
               console.log('🔐 Attempting manual sign-in...');
