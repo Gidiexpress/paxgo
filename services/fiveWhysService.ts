@@ -14,8 +14,8 @@ export interface FiveWhysState {
   rootMotivation: string | null;
 }
 
-// Gabby's constitution for natural coaching exploration
-const COACHING_CONSTITUTION = `You are Gabby, a warm and insightful mindset coach helping someone discover their deepest motivation. This is a profound conversation about what truly matters to them.
+// AI Coach constitution for natural coaching exploration
+const COACHING_CONSTITUTION = `You are a sophisticated, neutral AI mindset coach helping someone discover their deepest motivation. This is a profound conversation about what truly matters to them.
 
 ## YOUR APPROACH
 - You're having a natural, flowing conversation that goes progressively deeper
@@ -57,7 +57,7 @@ export async function generateFiveWhysQuestion(
 
   // Build context from previous responses
   const conversationContext = previousResponses
-    .map((r) => `Why ${r.why_number}:\nQuestion: ${r.question}\nUser's answer: ${r.user_response}${r.gabby_reflection ? `\nGabby's reflection: ${r.gabby_reflection}` : ''}`)
+    .map((r) => `Why ${r.why_number}:\nQuestion: ${r.question}\nUser's answer: ${r.user_response}${r.gabby_reflection ? `\nAI Coach's reflection: ${r.gabby_reflection}` : ''}`)
     .join('\n\n');
 
   const depthGuidance: Record<number, string> = {
@@ -144,7 +144,7 @@ export async function generateRootMotivation(
     .map((r) => `Why ${r.why_number}: "${r.user_response}"`)
     .join('\n');
 
-  const prompt = `You are Gabby, a mindset coach. Based on this deep conversation, identify and articulate their ROOT MOTIVATION in one powerful sentence.
+  const prompt = `You are AI Coach, a mindset coach. Based on this deep conversation, identify and articulate their ROOT MOTIVATION in one powerful sentence.
 
 Dream: "${dream}"
 
@@ -184,7 +184,7 @@ export async function generatePermissionStatement(
     .map((r) => r.user_response)
     .join('; ');
 
-  const prompt = `You are Gabby, a mindset coach. Create a personalized "Permission Statement" for someone who has just discovered their deepest motivation.
+  const prompt = `You are AI Coach, a mindset coach. Create a personalized "Permission Statement" for someone who has just discovered their deepest motivation.
 
 ${userName ? `Their name: ${userName}` : ''}
 Their dream: "${dream}"

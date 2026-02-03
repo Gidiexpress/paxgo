@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.boldTerracotta,
+    backgroundColor: colors.champagneGold,
     opacity: 0.3,
   },
   glow: {
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.boldTerracotta,
+    backgroundColor: colors.champagneGold,
   },
   micButton: {
     width: 44,
@@ -545,8 +545,8 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   micButtonRecording: {
-    backgroundColor: colors.boldTerracotta,
-    borderColor: colors.boldTerracotta,
+    backgroundColor: colors.champagneGold,
+    borderColor: colors.goldDark,
   },
   micButtonDisabled: {
     backgroundColor: colors.gray200,
@@ -570,7 +570,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.boldTerracotta,
+    backgroundColor: colors.champagneGold,
   },
   recordingIndicatorPulse: {
     position: 'absolute',
@@ -578,13 +578,13 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.boldTerracotta,
+    backgroundColor: colors.champagneGold,
     opacity: 0.4,
   },
   durationText: {
     fontFamily: typography.fontFamily.bodyMedium,
     fontSize: typography.fontSize.xs,
-    color: colors.boldTerracotta,
+    color: colors.champagneGold,
   },
   hintText: {
     fontFamily: typography.fontFamily.body,
@@ -604,6 +604,6 @@ const styles = StyleSheet.create({
   transcribingText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
-    color: colors.boldTerracotta,
+    color: colors.champagneGold,
   },
 });

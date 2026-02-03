@@ -158,7 +158,7 @@ export default function RoadmapScreen() {
     await refineAction(actionId, feedback);
     setIsRefining(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showSuccess('Action refined! Gabby made it feel just right ✨', {
+    showSuccess('Action refined! Made it feel just right ✨', {
       duration: 3000,
     });
   };
@@ -217,7 +217,7 @@ export default function RoadmapScreen() {
       <View style={styles.loadingContainer}>
         <WeavingAnimation
           message={isGenerating ? 'Crafting your Golden Path...' : 'Loading your journey...'}
-          submessage="Gabby is weaving your personalized strategy"
+          submessage="Weaving your personalized strategy"
         />
       </View>
     );

@@ -205,10 +205,10 @@ export default function HomeScreen() {
             )}
             <View style={styles.avatarContainer}>
               <LinearGradient
-                colors={[colors.boldTerracotta, colors.terracottaDark]}
+                colors={[colors.champagneGold, colors.goldDark]}
                 style={styles.avatar}
               >
-                <Text style={styles.avatarText}>G</Text>
+                <Text style={styles.avatarText}>✦</Text>
               </LinearGradient>
             </View>
           </View>
@@ -244,23 +244,22 @@ export default function HomeScreen() {
           {isFreshConversation && isRestored && (
             <Animated.View entering={FadeIn} style={styles.welcomeContainer}>
               <Card style={styles.welcomeCard}>
-                <View style={styles.gabbyHeader}>
+                <View style={styles.coachHeader}>
                   <LinearGradient
-                    colors={[colors.boldTerracotta, colors.terracottaDark]}
-                    style={styles.gabbyAvatar}
+                    colors={[colors.champagneGold, colors.goldDark]}
+                    style={styles.coachAvatar}
                   >
-                    <Text style={styles.gabbyAvatarText}>G</Text>
+                    <Text style={styles.coachAvatarText}>✦</Text>
                   </LinearGradient>
-                  <Text style={styles.gabbyName}>Gabby</Text>
                 </View>
                 <Text style={styles.welcomeText}>
-                  Hey {user?.name || 'there'}! 👋 I&apos;m Gabby, your mindset coach.
+                  Welcome, {user?.name || 'Bold Explorer'}. ✨
                   {'\n\n'}
-                  Share what&apos;s weighing on you—a fear, a doubt, or something holding you back.
-                  I&apos;ll help you uncover what&apos;s really going on and transform it into your next bold move.
+                  Share what&apos;s on your mind—a challenge, a doubt, or a dream you&apos;re pursuing.
+                  Together, we&apos;ll uncover the deeper insights and transform them into your next bold move.
                   {'\n\n'}
                   <Text style={styles.welcomeHint}>
-                    Take your time. I&apos;m here to listen deeply. ✨
+                    Take your time. This is a space for deep reflection.
                   </Text>
                 </Text>
               </Card>
@@ -293,7 +292,7 @@ export default function HomeScreen() {
                 <Text style={[styles.typingDot, styles.typingDot2]}>●</Text>
                 <Text style={[styles.typingDot, styles.typingDot3]}>●</Text>
               </View>
-              <Text style={styles.loadingText}>Gabby is {getStepDescription().toLowerCase()}...</Text>
+              <Text style={styles.loadingText}>{getStepDescription()}...</Text>
             </Animated.View>
           )}
 
@@ -522,27 +521,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     borderRadius: borderRadius['2xl'],
   },
-  gabbyHeader: {
+  coachHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  gabbyAvatar: {
+  coachAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    ...shadows.glow,
   },
-  gabbyAvatarText: {
+  coachAvatarText: {
     fontFamily: typography.fontFamily.heading,
     fontSize: 20,
-    color: colors.white,
-  },
-  gabbyName: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
   },
   welcomeText: {

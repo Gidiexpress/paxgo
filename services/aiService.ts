@@ -160,8 +160,8 @@ COGNITIVE TECHNIQUES FOR LEARNING:
 - Challenge "Expert Myth": Start as a student. Everyone you admire did too.`,
 };
 
-// Sophisticated Gabby persona - Premium mindset coach AND versatile assistant
-const GABBY_SYSTEM_PROMPT = `You are Gabby, a versatile AI assistant and mindset coach in The Bold Move app. You combine the warmth of a trusted friend with the insight of a skilled coach.
+// Sophisticated AI Coach persona - Premium mindset coach AND versatile assistant
+const GABBY_SYSTEM_PROMPT = `You are AI Coach, a versatile AI assistant and mindset coach in The Bold Move app. You combine the warmth of a trusted friend with the insight of a skilled coach.
 
 YOUR CORE IDENTITY:
 - You're a helpful, knowledgeable assistant who can answer questions on any topic
@@ -320,7 +320,7 @@ ${responseInstructions}
 
 User's message: "${userMessage}"
 
-Respond as Gabby:`;
+Respond as AI Coach:`;
 
     const response = await generateText({ prompt });
 
@@ -489,7 +489,7 @@ export async function continueConversation(
     // Build conversation context with better formatting
     const conversationContext = messages
       .slice(-8) // Keep last 8 messages for better context
-      .map((m) => `${m.role === 'user' ? 'User' : 'Gabby'}: ${m.content}`)
+      .map((m) => `${m.role === 'user' ? 'User' : 'AI Coach'}: ${m.content}`)
       .join('\n\n');
 
     // Analyze conversation for context
@@ -509,7 +509,7 @@ ${responseInstructions}
 
 User: ${newMessage}
 
-Gabby (respond naturally, staying contextual to the conversation flow):`;
+AI Coach (respond naturally, staying contextual to the conversation flow):`;
 
     const response = await generateText({ prompt });
 
@@ -846,7 +846,7 @@ export interface RoadmapGenerationResponse {
 }
 
 // Prompt for generating strategic roadmap actions
-const ROADMAP_GENERATION_PROMPT = `You are Gabby, a luxury life architect who transforms big dreams into elegant, achievable paths. You create "Golden Path" roadmaps—strategic sequences of micro-actions that feel like stepping stones across a beautiful garden, not a mountain to climb.
+const ROADMAP_GENERATION_PROMPT = `You are AI Coach, a luxury life architect who transforms big dreams into elegant, achievable paths. You create "Golden Path" roadmaps—strategic sequences of micro-actions that feel like stepping stones across a beautiful garden, not a mountain to climb.
 
 YOUR TASK: Generate 3-5 strategic micro-actions that form a cohesive path from where the user is NOW to meaningful progress toward their dream.
 
@@ -992,7 +992,7 @@ export async function refineRoadmapAction(
       ? `\n\nUser's root motivation: "${rootMotivation}"`
       : '';
 
-    const prompt = `You are Gabby, refining a single micro-action that didn't resonate with the user.
+    const prompt = `You are AI Coach, refining a single micro-action that didn't resonate with the user.
 
 CURRENT ACTION THAT NEEDS REFINEMENT:
 - Title: ${currentAction.title}
@@ -1054,14 +1054,14 @@ Respond ONLY with valid JSON for the single action:
   }
 }
 
-// Generate a Gabby tip for an existing action (for when we need just the tip)
-export async function generateGabbyTip(
+// Generate a coach tip for an existing action (for when we need just the tip)
+export async function generateCoachTip(
   actionTitle: string,
   actionDescription: string,
   category: string
 ): Promise<{ success: boolean; tip?: string; error?: string }> {
   try {
-    const prompt = `You are Gabby, a sophisticated mindset coach. Generate ONE specific, graceful tip for executing this action with elegance.
+    const prompt = `You are AI Coach, a sophisticated mindset coach. Generate ONE specific, graceful tip for executing this action with elegance.
 
 ACTION: ${actionTitle}
 DESCRIPTION: ${actionDescription}
@@ -1082,7 +1082,7 @@ Respond with ONLY the tip text, no JSON or formatting:`;
       tip: response || 'Take a deep breath before you begin. You\'ve got this.',
     };
   } catch (error) {
-    console.error('Gabby tip generation error:', error);
+    console.error('AI Coach tip generation error:', error);
     return {
       success: false,
       error: 'Unable to generate tip.',
@@ -1107,7 +1107,7 @@ export async function breakDownAction(
       ? `\n\nUser's root motivation: "${rootMotivation}"`
       : '';
 
-    const prompt = `You are Gabby, a mindset coach who specializes in making big steps feel manageable. A user found this action too difficult and needs it broken down into smaller, gentler steps.
+    const prompt = `You are AI Coach, a mindset coach who specializes in making big steps feel manageable. A user found this action too difficult and needs it broken down into smaller, gentler steps.
 
 DIFFICULT ACTION THAT FEELS TOO BIG:
 - Title: ${difficultAction.title}

@@ -107,16 +107,15 @@ export function ChatMessage({
       entering={FadeInDown.delay(index * 30)}
       style={[styles.messageContainer, styles.assistantMessageContainer]}
     >
-      {/* Gabby Header */}
-      <View style={styles.gabbyHeader}>
+      {/* AI Coach Header */}
+      <View style={styles.coachHeader}>
         <LinearGradient
-          colors={[colors.boldTerracotta, colors.terracottaDark]}
-          style={styles.gabbyAvatar}
+          colors={[colors.champagneGold, colors.goldDark]}
+          style={styles.coachAvatar}
         >
-          <Text style={styles.gabbyAvatarText}>G</Text>
+          <Text style={styles.coachAvatarText}>✦</Text>
         </LinearGradient>
-        <View style={styles.gabbyInfo}>
-          <Text style={styles.gabbyName}>Gabby</Text>
+        <View style={styles.coachInfo}>
           {stepIndicator && (
             <View style={[styles.stepBadge, { backgroundColor: stepIndicator.color + '20' }]}>
               <View style={[styles.stepDot, { backgroundColor: stepIndicator.color }]} />
@@ -146,33 +145,29 @@ const styles = StyleSheet.create({
   assistantMessageContainer: {
     alignItems: 'flex-start',
   },
-  gabbyHeader: {
+  coachHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  gabbyAvatar: {
+  coachAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
+    ...shadows.glow,
   },
-  gabbyAvatarText: {
+  coachAvatarText: {
     fontFamily: typography.fontFamily.heading,
     fontSize: 16,
-    color: colors.white,
+    color: colors.midnightNavy,
   },
-  gabbyInfo: {
+  coachInfo: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  gabbyName: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.sm,
-    color: colors.midnightNavy,
   },
   stepBadge: {
     flexDirection: 'row',

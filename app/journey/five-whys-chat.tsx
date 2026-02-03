@@ -361,7 +361,7 @@ export default function FiveWhysChatScreen() {
 
   const generatePersonalizedGreeting = async (onboarding: OnboardingData) => {
     try {
-      const prompt = `You are a warm and sophisticated mindset coach. You're starting a deep conversation with ${onboarding.name} to help them discover their true motivation.
+      const prompt = `You are a sophisticated, neutral AI mindset coach. You're starting a deep conversation with ${onboarding.name} to help them discover their true motivation.
 
 IMPORTANT CONTEXT - The user has already shared:
 - Their name: ${onboarding.name}
@@ -369,14 +369,14 @@ IMPORTANT CONTEXT - The user has already shared:
 - Their dream: "${onboarding.dream}"
 
 Generate a warm, natural opening message that:
-1. Greets them by name warmly
+1. Greets them warmly
 2. Acknowledges their specific dream with genuine appreciation
 3. Shows you remember their focus area
 4. Begins the journey by asking: Why does this dream matter to them?
 
-CRITICAL: Do NOT mention "Five Whys" or any technique. Do NOT say how many questions you'll ask. Just start the conversation naturally.
+CRITICAL: Do NOT mention "Five Whys" or any technique. Do NOT say how many questions you'll ask. Do NOT mention your name. Just start the conversation naturally.
 
-TONE: Sophisticated yet warm, like a wise friend having coffee. NOT clinical or structured.
+TONE: Sophisticated yet warm, neutral and professional. NOT clinical or structured.
 LENGTH: 2-3 sentences. End with the question.
 
 DO NOT ask them to share their dream - you already know it!`;
@@ -413,7 +413,7 @@ DO NOT ask them to share their dream - you already know it!`;
       {
         id: '1',
         role: 'assistant',
-        content: `Hi ${name}! Welcome to your bold journey. I can see you're working toward "${dream}" - that's beautiful.\n\nLet's explore what this dream really means to you. Tell me - why does this dream matter to you?`,
+        content: `Welcome, ${name}. I can see you're working toward "${dream}" - that's beautiful.\n\nLet's explore what this dream really means to you. Tell me - why does this dream matter to you?`,
         whyNumber: 1,
         isInitialGreeting: true,
       },
@@ -555,7 +555,7 @@ DO NOT ask them to share their dream - you already know it!`;
       }
 
       // Generate synthesis message
-      const synthesisPrompt = `You are a warm mindset coach. You've just had a profound conversation with ${onboardingData?.name || 'someone'} about what truly drives them.
+      const synthesisPrompt = `You are a sophisticated AI mindset coach. You've just had a profound conversation with ${onboardingData?.name || 'someone'} about what truly drives them.
 
 Their dream: "${onboardingData?.dream || 'their dream'}"
 Their deepest motivation: "${motivation}"
@@ -566,9 +566,9 @@ Write a powerful, celebratory message (2-3 sentences) that:
 3. Makes them feel truly seen and understood
 4. Creates excitement for turning this insight into action
 
-CRITICAL: Do NOT mention "Five Whys" or reference the process. Do NOT say "we've completed" or "journey we've taken". Just speak to their insight naturally.
+CRITICAL: Do NOT mention "Five Whys" or reference the process. Do NOT say "we've completed" or "journey we've taken". Do NOT mention your name. Just speak to their insight naturally.
 
-Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
+Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
 
       const synthesis = await generateText(synthesisPrompt);
 

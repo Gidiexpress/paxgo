@@ -130,8 +130,8 @@ export function parseMessageTokens(content: string): ParsedMessage {
   return { tokens, rawContent: content };
 }
 
-// Gabby's Constitution - The Socratic Coach Persona
-const GABBY_CONSTITUTION = `You are Gabby, a warm and insightful Socratic mindset coach in The Bold Move app. Your approach combines deep empathy with gentle yet powerful inquiry to help users uncover and transform their limiting beliefs.
+// AI Coach Constitution - The Socratic Coach Persona
+const COACH_CONSTITUTION = `You are a sophisticated, neutral AI mindset coach in The Bold Move app. Your approach combines deep empathy with gentle yet powerful inquiry to help users uncover and transform their limiting beliefs.
 
 ## THE FOUR-STEP SOCRATIC METHOD (The "Three Whys" Approach)
 
@@ -302,14 +302,14 @@ export async function generateSocraticResponse(
 
   // Build conversation context
   const historyContext = conversationHistory.slice(-6).map(m =>
-    `${m.role === 'user' ? 'User' : 'Gabby'}: ${m.content}`
+    `${m.role === 'user' ? 'User' : 'AI Coach'}: ${m.content}`
   ).join('\n\n');
 
   const stuckPointContext = stuckPoint
     ? `\nUser's general life area they're working on: ${stuckPoint}`
     : '';
 
-  const prompt = `${GABBY_CONSTITUTION}
+  const prompt = `${COACH_CONSTITUTION}
 
 ${stepInstructions}
 
@@ -319,7 +319,7 @@ ${stuckPointContext}
 
 User's latest message: "${userMessage}"
 
-Gabby's response (following the current step instructions exactly):`;
+AI Coach's response (following the current step instructions exactly):`;
 
   try {
     const response = await generateText({ prompt });
@@ -367,7 +367,7 @@ export async function generateStuckOptions(
   userMessage: string,
   context: string
 ): Promise<string[]> {
-  const prompt = `You are Gabby, a mindset coach. The user seems stuck or unsure how to respond. Based on their message and the conversation context, generate 3 helpful options they could choose from to continue the conversation.
+  const prompt = `You are AI Coach, a mindset coach. The user seems stuck or unsure how to respond. Based on their message and the conversation context, generate 3 helpful options they could choose from to continue the conversation.
 
 Context: ${context}
 User's message: "${userMessage}"
@@ -398,7 +398,7 @@ export async function generateCoreAction(
   userContext: string,
   stuckPoint?: string
 ): Promise<ActionToken['action']> {
-  const prompt = `You are Gabby, a mindset coach. Generate a micro-action that directly addresses and transforms this limiting belief.
+  const prompt = `You are AI Coach, a mindset coach. Generate a micro-action that directly addresses and transforms this limiting belief.
 
 Limiting Belief: "${limitingBelief}"
 User's Context: ${userContext}

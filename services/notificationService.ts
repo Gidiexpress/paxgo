@@ -53,7 +53,7 @@ export async function initializeNotificationChannels(): Promise<void> {
     });
 
     await Notifications.setNotificationChannelAsync(CHANNELS.morning_reframe, {
-      name: "Gabby's Morning Reframe",
+      name: "AI Coach's Morning Reframe",
       description: 'Mindset shifts and motivational quotes',
       importance: Notifications.AndroidImportance.DEFAULT,
     });
@@ -192,7 +192,7 @@ export async function scheduleMorningReframe(
     if (frequency === 'daily') {
       const id = await Notifications.scheduleNotificationAsync({
         content: {
-          title: "Gabby's Morning Reframe ✨",
+          title: "AI Coach's Morning Reframe ✨",
           body: reframe.message,
           data: { type: 'morning_reframe', theme: reframe.theme },
           ...(Platform.OS === 'android' && { channelId: CHANNELS.morning_reframe }),
@@ -209,7 +209,7 @@ export async function scheduleMorningReframe(
       for (let weekday = 2; weekday <= 6; weekday++) {
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: "Gabby's Morning Reframe ✨",
+            title: "AI Coach's Morning Reframe ✨",
             body: reframe.message,
             data: { type: 'morning_reframe', theme: reframe.theme },
             ...(Platform.OS === 'android' && { channelId: CHANNELS.morning_reframe }),
@@ -228,7 +228,7 @@ export async function scheduleMorningReframe(
       for (const weekday of [1, 7]) {
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: "Gabby's Morning Reframe ✨",
+            title: "AI Coach's Morning Reframe ✨",
             body: reframe.message,
             data: { type: 'morning_reframe', theme: reframe.theme },
             ...(Platform.OS === 'android' && { channelId: CHANNELS.morning_reframe }),
@@ -247,7 +247,7 @@ export async function scheduleMorningReframe(
       for (const weekday of [2, 4, 6]) {
         const id = await Notifications.scheduleNotificationAsync({
           content: {
-            title: "Gabby's Morning Reframe ✨",
+            title: "AI Coach's Morning Reframe ✨",
             body: GABBY_MORNING_REFRAMES[Math.floor(Math.random() * GABBY_MORNING_REFRAMES.length)].message,
             data: { type: 'morning_reframe' },
             ...(Platform.OS === 'android' && { channelId: CHANNELS.morning_reframe }),
