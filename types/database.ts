@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          id: string
+          name: string
+          avatar_url: string | null
+          bio: string | null
+          onboarding_completed: boolean | null
+          notification_preferences: Json | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id: string
+          name: string
+          avatar_url?: string | null
+          bio?: string | null
+          onboarding_completed?: boolean | null
+          notification_preferences?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          avatar_url?: string | null
+          bio?: string | null
+          onboarding_completed?: boolean | null
+          notification_preferences?: Json | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       action_roadmaps: {
         Row: {
           created_at: string | null
@@ -672,6 +705,7 @@ export type TablesInsert<T extends keyof Database['public']['Tables']> = Databas
 export type TablesUpdate<T extends keyof Database['public']['Tables']> = Database['public']['Tables'][T]['Update']
 
 // Typed table aliases
+export type DbProfile = Tables<'profiles'>
 export type DbUser = Tables<'users'>
 export type DbChatMessage = Tables<'chat_messages'>
 export type DbMicroAction = Tables<'micro_actions'>

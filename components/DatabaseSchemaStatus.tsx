@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -13,6 +14,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '@/constants/
 import {
   validateRoadmapSchema,
   getSchemaFixInstructions,
+  getCompleteSQLScript,
 } from '@/lib/schemaValidator';
 import { Clipboard } from 'react-native';
 
@@ -64,7 +66,19 @@ export function DatabaseSchemaStatus({ onClose }: DatabaseSchemaStatusProps) {
     if (schemaStatus?.instructions) {
       Clipboard.setString(schemaStatus.instructions);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Copied!', 'Instructions copied to clipboard');
     }
+  };
+
+  const copySQLScript = async () => {
+    const sqlScript = getCompleteSQLScript();
+    Clipboard.setString(sqlScript);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert(
+      'SQL Script Copied! 📋',
+      'Now:\n1. Open Supabase Dashboard\n2. Go to SQL Editor\n3. Paste and Run the script\n4. Come back and click "Check Again"',
+      [{ text: 'Got it!' }]
+    );
   };
 
   return (
@@ -136,26 +150,45 @@ export function DatabaseSchemaStatus({ onClose }: DatabaseSchemaStatusProps) {
                   </Text>
                 </View>
 
-                {/* Copy Button */}
+                {/* Copy SQL Script Button (Main CTA) */}
                 <TouchableOpacity
                   style={styles.copyButton}
-                  onPress={copyInstructions}
+                  onPress={copySQLScript}
                   activeOpacity={0.8}
                 >
                   <LinearGradient
                     colors={[colors.champagneGold, colors.goldDark]}
                     style={styles.copyButtonGradient}
                   >
-                    <Text style={styles.copyButtonText}>📋 Copy Instructions</Text>
+                    <Text style={styles.copyButtonText}>
+                      📋 Copy Complete SQL Script
+                    </Text>
                   </LinearGradient>
+                </TouchableOpacity>
+
+                {/* Copy Instructions Button (Secondary) */}
+                <TouchableOpacity
+                  style={styles.secondaryCopyButton}
+                  onPress={copyInstructions}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryCopyButtonText}>
+                    📝 Copy Instructions Only
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Additional Help */}
                 <View style={styles.helpCard}>
-                  <Text style={styles.helpTitle}>Need Help?</Text>
+                  <Text style={styles.helpTitle}>📖 Quick Guide</Text>
                   <Text style={styles.helpText}>
-                    If you're not sure how to update your database, please contact support
-                    or check the documentation in your Supabase dashboard.
+                    1. Click "Copy Complete SQL Script" above{'\n'}
+                    2. Open your Supabase Dashboard{'\n'}
+                    3. Go to SQL Editor (left sidebar){'\n'}
+                    4. Paste and click "Run"{'\n'}
+                    5. Return here and click "Check Again"
+                  </Text>
+                  <Text style={[styles.helpText, { marginTop: spacing.sm, fontStyle: 'italic' }]}>
+                    💡 The script is safe to run multiple times and won't affect existing data.
                   </Text>
                 </View>
               </View>
@@ -305,7 +338,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.full,
     overflow: 'hidden',
     ...shadows.md,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   copyButtonGradient: {
     paddingVertical: spacing.md,
@@ -316,6 +349,21 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.base,
     color: colors.midnightNavy,
+  },
+  secondaryCopyButton: {
+    backgroundColor: colors.gray100,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  secondaryCopyButtonText: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.base,
+    color: colors.gray700,
   },
   helpCard: {
     backgroundColor: colors.warmCream,
