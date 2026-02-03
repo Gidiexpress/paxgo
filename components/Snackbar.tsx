@@ -27,7 +27,7 @@ const SNACKBAR_MARGIN = spacing.lg;
 const SWIPE_THRESHOLD_X = 80; // Horizontal swipe threshold
 const SWIPE_THRESHOLD_Y = 50; // Vertical swipe threshold (swipe up to dismiss)
 
-// Color palette for different snackbar types
+// Color palette for different snackbar types - Luxury "Obsidian Glass" aesthetic
 const SNACKBAR_COLORS: Record<SnackbarType, {
   background: string;
   text: string;
@@ -36,32 +36,32 @@ const SNACKBAR_COLORS: Record<SnackbarType, {
   glow: string;
 }> = {
   success: {
-    background: 'rgba(46, 196, 182, 0.95)', // Vibrant Teal
+    background: 'rgba(46, 196, 182, 0.96)', // Vibrant Teal with higher opacity
     text: '#FFFFFF',
     icon: '#D4AF37', // Champagne Gold
     progressBar: '#D4AF37',
-    glow: 'rgba(46, 196, 182, 0.4)',
+    glow: 'rgba(46, 196, 182, 0.5)',
   },
   error: {
-    background: 'rgba(176, 85, 75, 0.95)', // Muted Terracotta (softer than bold)
-    text: '#FFFFFF',
-    icon: '#F9F7F2',
-    progressBar: '#F9F7F2',
-    glow: 'rgba(176, 85, 75, 0.4)',
+    background: 'rgba(1, 22, 39, 0.92)', // Obsidian Glass (Midnight Navy) for errors too
+    text: '#F9F7F2', // Parchment White
+    icon: '#E2725B', // Bold Terracotta for error icon accent
+    progressBar: '#E2725B',
+    glow: 'rgba(226, 114, 91, 0.4)', // Terracotta glow for distinction
   },
   info: {
-    background: 'rgba(1, 22, 39, 0.85)', // Obsidian glass (Midnight Navy)
-    text: '#F9F7F2',
-    icon: '#D4AF37',
-    progressBar: 'rgba(212, 175, 55, 0.6)',
-    glow: 'rgba(1, 22, 39, 0.3)',
+    background: 'rgba(1, 22, 39, 0.88)', // Obsidian glass (Midnight Navy) slightly more transparent
+    text: '#F9F7F2', // Parchment White
+    icon: '#D4AF37', // Champagne Gold
+    progressBar: 'rgba(212, 175, 55, 0.7)',
+    glow: 'rgba(212, 175, 55, 0.35)', // Gold glow
   },
   warning: {
-    background: 'rgba(212, 175, 55, 0.95)', // Champagne Gold
-    text: '#011627',
+    background: 'rgba(212, 175, 55, 0.96)', // Champagne Gold
+    text: '#011627', // Midnight Navy text for contrast
     icon: '#011627',
     progressBar: '#011627',
-    glow: 'rgba(212, 175, 55, 0.4)',
+    glow: 'rgba(212, 175, 55, 0.45)',
   },
 };
 
@@ -258,10 +258,14 @@ function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProp
           ]}
         />
 
-        {/* Main snackbar body */}
+        {/* Main snackbar body - Luxury glass effect */}
         <BlurView
-          intensity={config.type === 'info' ? 40 : 20}
-          tint={config.type === 'info' ? 'dark' : 'light'}
+          intensity={
+            config.type === 'info' || config.type === 'error' ? 45 : 25
+          }
+          tint={
+            config.type === 'info' || config.type === 'error' ? 'dark' : 'light'
+          }
           style={[
             styles.snackbarBody,
             {

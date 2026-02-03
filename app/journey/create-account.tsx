@@ -63,7 +63,7 @@ export default function CreateAccountScreen() {
     console.log('🎉 Authentication successful, navigating directly to coaching...');
     setIsNavigating(true);
 
-    showSuccess('Welcome! Let\'s begin your journey', {
+    showSuccess('Welcome aboard! Your journey begins now', {
       icon: '✨',
       duration: 2000,
     });
@@ -106,7 +106,7 @@ export default function CreateAccountScreen() {
     }
   }, [params.error, showError]);
 
-  // Handle error types for better UX
+  // Handle error types with luxury-style messaging
   useEffect(() => {
     if (!error) return;
 
@@ -116,14 +116,14 @@ export default function CreateAccountScreen() {
       return;
     }
 
-    // Handle specific error cases
+    // Handle specific error cases with sophisticated, user-friendly messages
     if (error.message?.includes('Invalid login credentials')) {
       // Only show this error if we're in sign-in mode
-      // Sign-up errors are handled separately in handleEmailSubmit
       if (authMode === 'email-signin') {
-        showError('Invalid email or password. Please try again.', {
+        showError('We couldn\'t find a match for those credentials', {
+          icon: '🔐',
           action: {
-            label: 'Reset',
+            label: 'Reset Password',
             onPress: () => {
               clearError();
               setAuthMode('forgot-password');
@@ -135,9 +135,8 @@ export default function CreateAccountScreen() {
         clearError(); // Clear error for sign-up, handled in submit function
       }
     } else if (error.message?.includes('already registered') || error.message?.includes('User already registered')) {
-      // Handle existing user gracefully - offer to sign in
-      showInfo('Account exists! Try signing in instead.', {
-        icon: '👋',
+      showInfo('Welcome back! This account already exists', {
+        icon: '✨',
         action: {
           label: 'Sign In',
           onPress: () => {
@@ -148,28 +147,45 @@ export default function CreateAccountScreen() {
         duration: 6000,
       });
     } else if (error.message?.includes('Email not confirmed')) {
-      // Email confirmation is still enabled in Supabase
-      showError(
-        'Email confirmation is required. Please check your email for the verification link.',
-        {
-          icon: '📧',
-          duration: 8000,
-        }
-      );
+      showInfo('Please verify your email to continue', {
+        icon: '📧',
+        duration: 8000,
+      });
     } else if (error.message?.includes('Email address') && error.message?.includes('invalid')) {
-      showError('Please enter a valid email address');
+      showError('Please provide a valid email address', {
+        icon: '📧',
+      });
     } else if (error.message?.includes('rate limit')) {
-      showError('Too many attempts. Please wait a moment and try again.', {
+      showInfo('Please take a moment before trying again', {
+        icon: '⏱',
+        duration: 6000,
+      });
+    } else if (error.message?.includes('Password should be at least')) {
+      showError('Your password needs to be stronger', {
+        icon: '🔐',
+        duration: 5000,
+      });
+    } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+      showError('Connection interrupted. Please check your network', {
+        icon: '📡',
         duration: 6000,
       });
     } else if (error.message) {
-      showError(error.message, { duration: 6000 });
+      // Generic fallback - avoid showing technical errors
+      showError('Something unexpected occurred. Please try again', {
+        icon: '⚠️',
+        duration: 6000,
+      });
+      console.error('Unhandled auth error:', error.message);
     }
   }, [error, authMode, clearError, showError, showInfo]);
 
   const handleGoogleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showInfo('Opening Google sign-in...', { duration: 2000 });
+    showInfo('Connecting with Google...', {
+      icon: '✨',
+      duration: 2000,
+    });
     try {
       clearError();
       await signInWithGoogle();
@@ -181,7 +197,10 @@ export default function CreateAccountScreen() {
 
   const handleAppleSignIn = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showInfo('Opening Apple sign-in...', { duration: 2000 });
+    showInfo('Connecting with Apple...', {
+      icon: '✨',
+      duration: 2000,
+    });
     try {
       clearError();
       await signInWithApple();
@@ -192,35 +211,48 @@ export default function CreateAccountScreen() {
   };
 
   const handleEmailSubmit = async () => {
+    // Immediate haptic feedback on button press
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Validation with sophisticated error messages
     if (!email.trim()) {
-      showError('Please enter your email address');
+      showError('Please provide your email address', {
+        icon: '📧',
+      });
       return;
     }
 
-    // Basic email validation
+    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      showError('Please enter a valid email address');
+      showError('This email format doesn\'t look quite right', {
+        icon: '📧',
+      });
       return;
     }
 
     if (!password.trim() || password.length < 6) {
-      showError('Password must be at least 6 characters');
+      showError('Your password should be at least 6 characters', {
+        icon: '🔐',
+      });
       return;
     }
 
     if (authMode === 'email-signup' && password !== confirmPassword) {
-      showError('Passwords do not match');
+      showError('Your passwords don\'t match', {
+        icon: '🔐',
+      });
       return;
     }
-
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     try {
       clearError();
       if (authMode === 'email-signup') {
         console.log('📝 Starting email sign-up for:', email);
-        showInfo('Creating your account...', { duration: 3000 });
+        showInfo('Creating your account...', {
+          icon: '✨',
+          duration: 3000,
+        });
 
         try {
           console.log('🔐 Calling signUpWithEmail...');
@@ -249,9 +281,12 @@ export default function CreateAccountScreen() {
 
               // If sign-in also fails, the account might not exist yet
               if (signinError?.message?.includes('Invalid login credentials')) {
-                showError(
-                  'Account created but sign-in failed. Please try signing in again.',
-                  { duration: 6000 }
+                showInfo(
+                  'Your account is ready. Please sign in to continue',
+                  {
+                    icon: '✨',
+                    duration: 6000,
+                  }
                 );
                 // Switch to sign-in mode
                 setTimeout(() => setAuthMode('email-signin'), 1500);
@@ -265,7 +300,10 @@ export default function CreateAccountScreen() {
         }
       } else {
         console.log('🔐 Starting email sign-in for:', email);
-        showInfo('Signing you in...', { duration: 2000 });
+        showInfo('Signing you in...', {
+          icon: '✨',
+          duration: 2000,
+        });
         await signInWithEmail(email, password);
         console.log('✅ Sign-in completed successfully');
         // Navigation will be handled by the auth state listener
@@ -278,13 +316,17 @@ export default function CreateAccountScreen() {
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      showError('Please enter your email address');
+      showError('Please provide your email address', {
+        icon: '📧',
+      });
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
-      showError('Please enter a valid email address');
+      showError('This email format doesn\'t look quite right', {
+        icon: '📧',
+      });
       return;
     }
 
@@ -293,13 +335,16 @@ export default function CreateAccountScreen() {
     try {
       clearError();
       await resetPassword(email);
-      showSuccess(`Reset link sent to ${email}`, {
+      showSuccess('Password reset instructions sent', {
         icon: '✉️',
         duration: 4000,
       });
     } catch (err) {
       console.error('Password reset error:', err);
-      showError('Could not send reset email. Please try again.');
+      showError('We couldn\'t send the reset email. Please try again', {
+        icon: '📧',
+        duration: 5000,
+      });
     }
   };
 
