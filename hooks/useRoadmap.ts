@@ -15,6 +15,7 @@ import {
   breakDownAction,
   RoadmapActionData,
 } from '@/services/aiService';
+import { validateRoadmapSchema, getSchemaFixInstructions } from '@/lib/schemaValidator';
 
 // Hook for managing action roadmaps
 export function useRoadmap() {
@@ -88,6 +89,27 @@ export function useRoadmap() {
       setError(null);
 
       try {
+        // Validate database schema before attempting to create roadmap
+        const schemaValidation = await validateRoadmapSchema();
+        if (!schemaValidation.isValid) {
+          const instructions = getSchemaFixInstructions(schemaValidation);
+          console.error('Schema validation failed:', schemaValidation.errorMessage);
+          console.error(instructions);
+
+          // Set user-friendly error message
+          const errorMsg = schemaValidation.errorMessage || 'Database schema is outdated. Please update your database.';
+          setError(errorMsg);
+
+          // Return error object with detailed info for the UI to display
+          return {
+            error: true,
+            errorType: 'SCHEMA_OUTDATED',
+            message: errorMsg,
+            instructions,
+            schemaValidation,
+          } as any;
+        }
+
         // Generate actions using AI
         const aiResult = await generateRoadmapActions(dream, rootMotivation);
 
@@ -110,7 +132,27 @@ export function useRoadmap() {
           .select()
           .single();
 
-        if (roadmapError) throw roadmapError;
+        if (roadmapError) {
+          // Check if it's a schema-related error that slipped through validation
+          if (roadmapError.code === 'PGRST204' || roadmapError.message?.includes('column')) {
+            const instructions = getSchemaFixInstructions({
+              isValid: false,
+              missingColumns: ['dream', 'root_motivation', 'roadmap_title'],
+              missingTables: [],
+              errorMessage: roadmapError.message,
+            });
+
+            setError('Database schema is outdated');
+            return {
+              error: true,
+              errorType: 'SCHEMA_OUTDATED',
+              message: roadmapError.message,
+              instructions,
+            } as any;
+          }
+
+          throw roadmapError;
+        }
 
         // Insert actions
         const actionsToInsert: RoadmapActionInsert[] = aiResult.actions.map(
