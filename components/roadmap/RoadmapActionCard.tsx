@@ -28,6 +28,7 @@ interface RoadmapActionCardProps {
   onRefine?: (action: RoadmapAction) => void;
   animationDelay?: number;
   hasProof?: boolean;
+  isLocked?: boolean;
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -54,6 +55,7 @@ export function RoadmapActionCard({
   onRefine,
   animationDelay = 0,
   hasProof = false,
+  isLocked = false,
 }: RoadmapActionCardProps) {
   const [isPressed, setIsPressed] = useState(false);
   const scale = useSharedValue(1);
@@ -112,17 +114,27 @@ export function RoadmapActionCard({
       entering={FadeInRight.delay(animationDelay).springify().damping(15)}
     >
       <Pressable
-        onPress={handleCardPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
+        onPress={isLocked ? undefined : handleCardPress}
+        onPressIn={isLocked ? undefined : handlePressIn}
+        onPressOut={isLocked ? undefined : handlePressOut}
+        disabled={isLocked}
       >
         <Animated.View
           style={[
             styles.card,
             action.is_completed && styles.cardCompleted,
+            isLocked && styles.cardLocked,
             animatedCardStyle,
           ]}
         >
+          {/* Lock overlay for locked cards */}
+          {isLocked && (
+            <View style={styles.lockOverlay}>
+              <View style={styles.lockIcon}>
+                <Text style={styles.lockIconText}>🔒</Text>
+              </View>
+            </View>
+          )}
           {/* Category badge */}
           <View style={[styles.categoryBadge, { backgroundColor: categoryColor + '20' }]}>
             <Text style={styles.categoryIcon}>{categoryIcon}</Text>
@@ -290,6 +302,34 @@ const styles = StyleSheet.create({
   cardCompleted: {
     backgroundColor: colors.warmCream,
     borderColor: colors.champagneGold + '40',
+  },
+  cardLocked: {
+    opacity: 0.6,
+    backgroundColor: colors.gray100,
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: borderRadius['2xl'],
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  lockIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.gray200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.md,
+  },
+  lockIconText: {
+    fontSize: 24,
   },
   categoryBadge: {
     flexDirection: 'row',

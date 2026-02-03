@@ -27,6 +27,7 @@ import { colors, typography, spacing, shadows, borderRadius } from '@/constants/
 import { useRoadmap } from '@/hooks/useRoadmap';
 import { useUser, useProofs } from '@/hooks/useStorage';
 import { RoadmapAction } from '@/types/database';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { RoadmapActionCard } from '@/components/roadmap/RoadmapActionCard';
 import { FocusModeModal } from '@/components/roadmap/FocusModeModal';
@@ -43,6 +44,7 @@ export default function RoadmapScreen() {
   const { user } = useUser();
   const { hasProofForAction } = useProofs();
   const { showSuccess, showInfo, showError } = useSnackbar();
+  const { isPremium } = useSubscription();
   const {
     activeRoadmap,
     loading,
@@ -135,6 +137,13 @@ export default function RoadmapScreen() {
         duration: 3500,
         icon: '🎉',
       });
+
+      // Trigger paywall after 2nd or 3rd action if not premium
+      if (!isPremium && (newCompletedCount === 2 || newCompletedCount === 3)) {
+        setTimeout(() => {
+          router.push('/paywall');
+        }, 2000); // Show paywall after celebration
+      }
 
       // Close focus mode after brief delay
       setTimeout(() => {
@@ -341,17 +350,24 @@ export default function RoadmapScreen() {
 
             {/* Action cards */}
             <View style={styles.cardsContainer}>
-              {activeRoadmap.actions.map((action, index) => (
-                <RoadmapActionCard
-                  key={action.id}
-                  action={action}
-                  index={index}
-                  onComplete={handleComplete}
-                  onPress={handleActionPress}
-                  animationDelay={100 + index * 80}
-                  hasProof={hasProofForAction(action.id)}
-                />
-              ))}
+              {activeRoadmap.actions.map((action, index) => {
+                // Check if card should be locked (previous action not completed)
+                const previousAction = index > 0 ? activeRoadmap.actions[index - 1] : null;
+                const isLocked = previousAction ? !previousAction.is_completed : false;
+
+                return (
+                  <RoadmapActionCard
+                    key={action.id}
+                    action={action}
+                    index={index}
+                    onComplete={handleComplete}
+                    onPress={handleActionPress}
+                    animationDelay={100 + index * 80}
+                    hasProof={hasProofForAction(action.id)}
+                    isLocked={isLocked}
+                  />
+                );
+              })}
             </View>
           </View>
         </View>

@@ -167,7 +167,7 @@ export default function StuckPointScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={[colors.parchmentWhite, colors.warmCream]}
+        colors={[colors.midnightNavy, '#0A1929', '#051118']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -189,9 +189,9 @@ export default function StuckPointScreen() {
             <View style={styles.stepDot} />
           </View>
 
-          <Text style={styles.title}>Where are you feeling stuck?</Text>
+          <Text style={styles.title}>The Hub</Text>
           <Text style={styles.subtitle}>
-            Select the area where you&apos;d like to make bold moves
+            Choose your path. Every great journey begins with a bold move.
           </Text>
         </Animated.View>
 
@@ -226,7 +226,7 @@ export default function StuckPointScreen() {
           <LinearGradient
             colors={
               selectedCategory
-                ? [colors.midnightNavy, '#0A2540']
+                ? [colors.champagneGold, colors.goldDark]
                 : [colors.gray300, colors.gray400]
             }
             style={styles.continueGradient}
@@ -250,7 +250,7 @@ export default function StuckPointScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.parchmentWhite,
+    backgroundColor: colors.midnightNavy,
   },
   scrollView: {
     flex: 1,
@@ -288,14 +288,14 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize['3xl'],
-    color: colors.midnightNavy,
+    color: colors.white,
     textAlign: 'center',
     marginBottom: spacing.sm,
   },
   subtitle: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.base,
-    color: colors.gray600,
+    color: 'rgba(255,255,255,0.75)',
     textAlign: 'center',
   },
   cardsContainer: {
@@ -371,10 +371,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: spacing.xl,
-    backgroundColor: colors.parchmentWhite,
+    backgroundColor: colors.midnightNavy,
     paddingTop: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: colors.gray200,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   continueButton: {
     borderRadius: borderRadius.xl,
@@ -394,13 +394,13 @@ const styles = StyleSheet.create({
   continueText: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
-    color: colors.white,
+    color: colors.midnightNavy,
   },
   continueTextDisabled: {
     color: colors.gray500,
   },
   continueArrow: {
     fontSize: 20,
-    color: colors.white,
+    color: colors.midnightNavy,
   },
 });

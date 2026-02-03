@@ -30,8 +30,9 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@fastshot/auth';
-import { useTextGeneration } from '@fastshot/ai';
+import { useTextGeneration, useAudioTranscription } from '@fastshot/ai';
 import { supabase } from '@/lib/supabase';
+import { Audio } from 'expo-av';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import {
   colors,
@@ -53,7 +54,7 @@ interface Message {
   role: 'assistant' | 'user';
   content: string;
   whyNumber?: number;
-  isGabbyGreeting?: boolean;
+  isInitialGreeting?: boolean;
 }
 
 interface OnboardingData {
@@ -79,6 +80,7 @@ export default function FiveWhysChatScreen() {
   const { user } = useAuth();
   const { showSuccess, showError } = useSnackbar();
   const { generateText, isLoading: isAILoading } = useTextGeneration();
+  const { transcribeAudio, isLoading: isTranscribing } = useAudioTranscription();
 
   // State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -91,6 +93,8 @@ export default function FiveWhysChatScreen() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [rootMotivation, setRootMotivation] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
 
   // Animation values
   const ambientGlowProgress = useSharedValue(0);
@@ -252,7 +256,7 @@ export default function FiveWhysChatScreen() {
 
       setSessionId(activeSessionId);
 
-      // Generate personalized greeting from Gabby
+      // Generate personalized greeting
       await generatePersonalizedGreeting(onboarding);
     } catch (error) {
       console.error('Failed to initialize chat:', error);
@@ -357,7 +361,7 @@ export default function FiveWhysChatScreen() {
 
   const generatePersonalizedGreeting = async (onboarding: OnboardingData) => {
     try {
-      const prompt = `You are Gabby, a warm and sophisticated mindset coach. You're starting a deep conversation with ${onboarding.name} to help them discover their true motivation.
+      const prompt = `You are a warm and sophisticated mindset coach. You're starting a deep conversation with ${onboarding.name} to help them discover their true motivation.
 
 IMPORTANT CONTEXT - The user has already shared:
 - Their name: ${onboarding.name}
@@ -386,7 +390,7 @@ DO NOT ask them to share their dream - you already know it!`;
             role: 'assistant',
             content: response,
             whyNumber: 1,
-            isGabbyGreeting: true,
+            isInitialGreeting: true,
           },
         ]);
         setCurrentWhyNumber(1);
@@ -409,9 +413,9 @@ DO NOT ask them to share their dream - you already know it!`;
       {
         id: '1',
         role: 'assistant',
-        content: `Hi ${name}! I'm Gabby, and I'm so glad you're here. I can see you're working toward "${dream}" - that's beautiful.\n\nLet's explore what this dream really means to you. Tell me - why does this dream matter to you?`,
+        content: `Hi ${name}! Welcome to your bold journey. I can see you're working toward "${dream}" - that's beautiful.\n\nLet's explore what this dream really means to you. Tell me - why does this dream matter to you?`,
         whyNumber: 1,
-        isGabbyGreeting: true,
+        isInitialGreeting: true,
       },
     ]);
     setCurrentWhyNumber(1);
@@ -551,7 +555,7 @@ DO NOT ask them to share their dream - you already know it!`;
       }
 
       // Generate synthesis message
-      const synthesisPrompt = `You are Gabby. You've just had a profound conversation with ${onboardingData?.name || 'someone'} about what truly drives them.
+      const synthesisPrompt = `You are a warm mindset coach. You've just had a profound conversation with ${onboardingData?.name || 'someone'} about what truly drives them.
 
 Their dream: "${onboardingData?.dream || 'their dream'}"
 Their deepest motivation: "${motivation}"
@@ -613,6 +617,63 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
     }
   };
 
+  const handleStartRecording = async () => {
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      // Request permissions
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        showError('Microphone permission is required for voice input');
+        return;
+      }
+
+      // Configure audio mode
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // Start recording
+      const { recording: newRecording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+
+      setRecording(newRecording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      showError('Could not start recording');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (!recording) return;
+
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+
+      const uri = recording.getURI();
+      setRecording(null);
+
+      if (uri) {
+        // Transcribe the audio
+        const transcription = await transcribeAudio({ audioUri: uri, language: 'en' });
+
+        if (transcription) {
+          setInputText(transcription);
+          showSuccess('Voice transcribed!', { icon: '🎤', duration: 2000 });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to stop recording:', err);
+      showError('Could not transcribe audio');
+    }
+  };
+
   // Animated styles
   const ambientGlowStyle = useAnimatedStyle(() => {
     const backgroundColor = interpolateColor(
@@ -658,9 +719,16 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
       <Animated.View entering={FadeInDown.delay(100)} style={styles.progressSection}>
         <View style={styles.progressHeader}>
           <View style={styles.progressInfo}>
-            <Text style={styles.progressTitle}>Mindset Coaching</Text>
+            <View style={styles.logoContainer}>
+              <LinearGradient
+                colors={[colors.champagneGold, colors.goldDark]}
+                style={styles.logoGradient}
+              >
+                <Text style={styles.logoIcon}>✦</Text>
+              </LinearGradient>
+            </View>
             <Text style={styles.progressSubtitle}>
-              {isComplete ? 'Journey Complete ✨' : 'Exploring Your Motivation'}
+              {isComplete ? 'Journey Complete ✨' : 'Deep Dive Conversation'}
             </Text>
           </View>
 
@@ -710,7 +778,7 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
               colors={[colors.champagneGold, colors.goldDark]}
               style={styles.avatar}
             >
-              <Text style={styles.avatarText}>G</Text>
+              <Text style={styles.avatarText}>✦</Text>
             </LinearGradient>
           </View>
         )}
@@ -764,7 +832,7 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
           style={StyleSheet.absoluteFill}
         />
         <ActivityIndicator size="large" color={colors.vibrantTeal} />
-        <Text style={styles.loadingText}>Starting your conversation with Gabby...</Text>
+        <Text style={styles.loadingText}>Preparing your coaching session...</Text>
       </View>
     );
   }
@@ -816,8 +884,7 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
                 colors={[colors.champagneGold, colors.goldDark]}
                 style={styles.continueGradient}
               >
-                <Text style={styles.continueText}>See My Golden Path</Text>
-                <Text style={styles.continueArrow}>→</Text>
+                <Text style={styles.continueText}>Yes, show me my first steps!</Text>
               </LinearGradient>
             </TouchableOpacity>
           </Animated.View>
@@ -831,8 +898,30 @@ Include a ✨ emoji. Be warm, sophisticated, and genuinely moved.`;
               onChangeText={setInputText}
               multiline
               maxLength={500}
-              editable={!isSending && !isAILoading}
+              editable={!isSending && !isAILoading && !isRecording}
             />
+
+            {/* Microphone button */}
+            <TouchableOpacity
+              style={[
+                styles.micButton,
+                isRecording && styles.micButtonActive,
+              ]}
+              onPress={isRecording ? handleStopRecording : handleStartRecording}
+              disabled={isSending || isAILoading || isTranscribing}
+            >
+              <LinearGradient
+                colors={
+                  isRecording
+                    ? [colors.boldTerracotta, colors.terracottaDark]
+                    : [colors.champagneGold, colors.goldDark]
+                }
+                style={styles.micGradient}
+              >
+                <Text style={styles.micIcon}>{isRecording ? '⏹' : '🎤'}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[
                 styles.sendButton,
@@ -896,6 +985,23 @@ const styles = StyleSheet.create({
   },
   progressInfo: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  logoContainer: {
+    marginBottom: 0,
+  },
+  logoGradient: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoIcon: {
+    fontSize: 16,
+    color: colors.midnightNavy,
   },
   progressTitle: {
     fontFamily: typography.fontFamily.heading,
@@ -1052,6 +1158,23 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     ...shadows.sm,
   },
+  micButton: {
+    borderRadius: borderRadius.full,
+    overflow: 'hidden',
+    marginRight: spacing.sm,
+  },
+  micButtonActive: {
+    transform: [{ scale: 1.1 }],
+  },
+  micGradient: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micIcon: {
+    fontSize: 20,
+  },
   sendButton: {
     borderRadius: borderRadius.full,
     overflow: 'hidden',
@@ -1100,23 +1223,25 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   continueButton: {
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
     ...shadows.lg,
     shadowColor: colors.champagneGold,
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
   },
   continueGradient: {
     flexDirection: 'row',
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing['2xl'],
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
   },
   continueText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
+    letterSpacing: 0.5,
   },
   continueArrow: {
     fontSize: 18,
