@@ -603,16 +603,16 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
       await AsyncStorage.setItem('@boldmove_root_motivation', rootMotivation || '');
       await AsyncStorage.setItem('@boldmove_onboarding_complete', 'true');
 
-      // Navigate to roadmap with params - the roadmap page will generate the roadmap
+      // Navigate to generation screen - it will show loading animation and generate roadmap
       router.replace({
-        pathname: '/roadmap',
+        pathname: '/generate-roadmap',
         params: {
           dream: onboardingData?.dream || 'your dream',
           rootMotivation: rootMotivation || '',
         },
       });
     } catch (error) {
-      console.error('Failed to navigate to roadmap:', error);
+      console.error('Failed to navigate to generation:', error);
       router.replace('/(tabs)');
     }
   };

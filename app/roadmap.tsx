@@ -65,7 +65,6 @@ export default function RoadmapScreen() {
   const [celebrationMessage, setCelebrationMessage] = useState('');
   const [isRefining, setIsRefining] = useState(false);
   const [isBreakingDown, setIsBreakingDown] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Progress line animation
@@ -81,18 +80,6 @@ export default function RoadmapScreen() {
   const progressAnimatedStyle = useAnimatedStyle(() => ({
     width: `${progressWidth.value}%`,
   }));
-
-  // Generate roadmap if params are passed and no active roadmap
-  useEffect(() => {
-    const generateIfNeeded = async () => {
-      if (params.dream && !activeRoadmap && !loading && !isGenerating) {
-        setIsGenerating(true);
-        await createRoadmap(params.dream, params.rootMotivation);
-        setIsGenerating(false);
-      }
-    };
-    generateIfNeeded();
-  }, [params.dream, activeRoadmap, loading]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -196,9 +183,14 @@ export default function RoadmapScreen() {
   const handleGenerateNew = async () => {
     const dream = user?.dream || params.dream;
     if (dream) {
-      setIsGenerating(true);
-      await createRoadmap(dream, params.rootMotivation);
-      setIsGenerating(false);
+      // Navigate to generation screen - it will handle the loading animation and generation
+      router.push({
+        pathname: '/generate-roadmap',
+        params: {
+          dream,
+          rootMotivation: params.rootMotivation || user?.dream || '',
+        },
+      });
     } else {
       router.push('/new-dream');
     }
@@ -211,13 +203,13 @@ export default function RoadmapScreen() {
 
   const activeIndex = activeRoadmap?.actions.findIndex((a) => !a.is_completed) ?? 0;
 
-  // Loading state - Weaving animation
-  if (loading || isGenerating) {
+  // Loading state - Fetching roadmaps
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <WeavingAnimation
-          message={isGenerating ? 'Crafting your Golden Path...' : 'Loading your journey...'}
-          submessage="Weaving your personalized strategy"
+          message="Loading your journey..."
+          submessage="Fetching your roadmap"
         />
       </View>
     );
@@ -246,7 +238,6 @@ export default function RoadmapScreen() {
               onPress={handleGenerateNew}
               variant="primary"
               gradient
-              loading={isGenerating}
             />
           </Animated.View>
         </View>
@@ -332,10 +323,8 @@ export default function RoadmapScreen() {
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeader}>
             <Text style={styles.sectionTitle}>Your Micro-Actions</Text>
-            <TouchableOpacity onPress={handleGenerateNew} disabled={isGenerating}>
-              <Text style={styles.regenerateText}>
-                {isGenerating ? 'Generating...' : '✨ New Path'}
-              </Text>
+            <TouchableOpacity onPress={handleGenerateNew}>
+              <Text style={styles.regenerateText}>✨ New Path</Text>
             </TouchableOpacity>
           </View>
 
