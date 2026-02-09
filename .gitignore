@@ -8,9 +8,13 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
-.kotlin/
-*.orig.*
+# Native generated directories
+android/
+ios/
+.expo/
+
+# Local configuration
+local.properties
 *.jks
 *.p8
 *.p12
