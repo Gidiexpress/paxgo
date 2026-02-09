@@ -41,6 +41,36 @@ const CARD_STYLE_CONFIGS: Record<PermissionSlipVisualStyle, CardStyleConfig> = {
     textColor: colors.parchmentWhite,
     flourish: '◆',
   },
+  classic: {
+    backgroundColors: ['#FDF8ED', '#F5EDD6', '#FDF8ED'],
+    accentColor: '#D4C4A8',
+    textColor: colors.midnightNavy,
+    flourish: '✦',
+  },
+  royal: {
+    backgroundColors: ['#FBF7E9', '#E8DFC6', '#FBF7E9'],
+    accentColor: '#D4AF37',
+    textColor: colors.midnightNavy,
+    flourish: '👑',
+  },
+  cosmic: {
+    backgroundColors: ['#F5F3FF', '#E8E4F7', '#F5F3FF'],
+    accentColor: '#A78BFA',
+    textColor: colors.midnightNavy,
+    flourish: '✨',
+  },
+  sisterhood: {
+    backgroundColors: ['#FFF5F5', '#FFECEC', '#FFF5F5'],
+    accentColor: '#FDA4AF',
+    textColor: colors.midnightNavy,
+    flourish: '💫',
+  },
+  'future-self': {
+    backgroundColors: ['#F0F9FF', '#E0F2FE', '#F0F9FF'],
+    accentColor: '#38BDF8',
+    textColor: colors.midnightNavy,
+    flourish: '🌟',
+  },
 };
 
 interface PermissionSlipCardProps {
@@ -59,10 +89,10 @@ export function PermissionSlipCard({
 
   const formattedDate = slip.signed_at
     ? new Date(slip.signed_at).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      })
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
     : '';
 
   if (compact) {

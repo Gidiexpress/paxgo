@@ -6,382 +6,343 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn, FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, spacing, shadows, borderRadius } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { ProgressBar } from '@/components/ui/ProgressBar';
-import { ActionCard } from '@/components/ActionCard';
-import { DeepDiveModal } from '@/components/DeepDiveModal';
-import { ActiveDeepDiveBanner } from '@/components/ActiveDeepDiveBanner';
 import { ConfettiAnimation } from '@/components/ConfettiAnimation';
-import { useUser, useActions, useDreamProgress, useDeepDive } from '@/hooks/useStorage';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useMicroActions } from '@/hooks/useAI';
+import { FocusModeModal } from '@/components/roadmap/FocusModeModal';
+import { useUser } from '@/hooks/useStorage';
 import { useRoadmap } from '@/hooks/useRoadmap';
-import { MicroAction } from '@/types';
+import { useSnackbar } from '@/contexts/SnackbarContext';
+import { RoadmapAction } from '@/types/database';
 
-export default function ActionScreen() {
+// Get time-based greeting
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return '☀️ Good morning';
+  if (hour < 17) return '🌤️ Good afternoon';
+  return '🌙 Good evening';
+};
+
+export default function TodayScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
   const { user } = useUser();
-  const { addAction, completeAction, getTodayActions, syncPendingChatActions, refreshActions, loading: actionsLoading } = useActions();
-  const { incrementCompletedActions } = useDreamProgress();
-  const { deepDive, hasActiveDeepDive } = useDeepDive();
-  const { isPremium } = useSubscription();
-  const { actions: aiActions, isLoading: aiLoading, generateActions } = useMicroActions();
-  const { activeRoadmap, activeProgress } = useRoadmap();
+  const { showSuccess } = useSnackbar();
+  // Note: proof functionality can be added later if needed
+  const {
+    activeRoadmap,
+    roadmaps, // Add roadmaps to destructuring
+    loading,
+    activeProgress,
+    completedCount,
+    totalCount,
+    completeAction,
+    fetchRoadmaps,
+    updateRoadmapStatus,
+  } = useRoadmap();
 
+  const [selectedAction, setSelectedAction] = useState<RoadmapAction | null>(null);
+  const [showFocusMode, setShowFocusMode] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
-  const [todayActions, setTodayActions] = useState<MicroAction[]>([]);
-  const [deepDiveAction, setDeepDiveAction] = useState<MicroAction | null>(null);
-  const [showDeepDiveModal, setShowDeepDiveModal] = useState(false);
-  const [syncedCount, setSyncedCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Sync pending chat actions when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      const syncFromChat = async () => {
-        const count = await syncPendingChatActions();
-        if (count > 0) {
-          setSyncedCount(count);
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          // Refresh to show synced actions
-          await refreshActions();
-        }
-      };
-      syncFromChat();
-    }, [syncPendingChatActions, refreshActions])
+  // Get the current action (first incomplete action)
+  const currentAction = activeRoadmap?.actions?.find((a) => !a.is_completed) || null;
+
+  // Get next action preview
+  const nextAction = activeRoadmap?.actions?.find(
+    (a, index) => !a.is_completed && activeRoadmap.actions.findIndex((x) => !x.is_completed) !== index
   );
 
-  // Load or generate today's actions
-  useEffect(() => {
-    const loadActions = async () => {
-      const existing = getTodayActions();
-      if (existing.length > 0) {
-        setTodayActions(existing);
-      } else if (user?.dream) {
-        // Generate new actions if none exist
-        await generateActions(user.dream, user.stuckPoint);
-      }
-    };
-    loadActions();
-  }, [user]);
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchRoadmaps();
+    setRefreshing(false);
+  }, [fetchRoadmaps]);
 
-  // Add AI-generated actions to storage
-  useEffect(() => {
-    const saveAIActions = async () => {
-      if (aiActions.length > 0 && todayActions.length === 0) {
-        const newActions: MicroAction[] = [];
-        for (const aiAction of aiActions) {
-          const action = await addAction({
-            title: aiAction.title,
-            description: aiAction.description,
-            duration: aiAction.duration,
-            isPremium: aiAction.category === 'connection' || aiAction.category === 'action',
-            isCompleted: false,
-            category: aiAction.category,
-            dreamId: user?.dream || 'default',
-          });
-          newActions.push(action);
-        }
-        setTodayActions(newActions);
-      }
-    };
-    saveAIActions();
-  }, [aiActions]);
-
-  // Check for active deep dive on mount and auto-open modal
-  useEffect(() => {
-    if (hasActiveDeepDive && deepDive) {
-      const action = todayActions.find(a => a.id === deepDive.actionId);
-      if (action && !action.isCompleted) {
-        setDeepDiveAction(action);
-        // Small delay to let the screen render first
-        setTimeout(() => setShowDeepDiveModal(true), 500);
-      }
+  const handleStartAction = () => {
+    if (currentAction) {
+      setSelectedAction(currentAction);
+      setShowFocusMode(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
-  }, [hasActiveDeepDive, deepDive, todayActions]);
+  };
 
-  const handleCompleteAction = async (actionId: string) => {
-    await completeAction(actionId);
-    await incrementCompletedActions();
-    setTodayActions((prev) =>
-      prev.map((a) =>
-        a.id === actionId ? { ...a, isCompleted: true, completedAt: new Date().toISOString() } : a
-      )
+  const handleComplete = async (actionId: string) => {
+    const success = await completeAction(actionId);
+    if (success) {
+      setShowConfetti(true);
+      showSuccess('Action completed! You are making progress! 🔥');
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Close focus mode after a brief delay to show completion
+      setTimeout(() => {
+        setShowFocusMode(false);
+        setSelectedAction(null);
+      }, 500);
+    }
+  };
+
+  // Handle sub-action completion without closing the modal
+  const handleSubActionComplete = async (subActionId: string) => {
+    const success = await completeAction(subActionId);
+    if (success) {
+      // Show confetti within the modal (handled by FocusModeModal)
+
+      // Update local state to reflect change immediately without reloading
+      setSelectedAction((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          subActions: prev.subActions?.map((sub) =>
+            sub.id === subActionId
+              ? { ...sub, is_completed: true }
+              : sub
+          ),
+        };
+      });
+    }
+  };
+
+  const handleCloseFocusMode = () => {
+    setShowFocusMode(false);
+    setSelectedAction(null);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color={colors.boldTerracotta} />
+        <Text style={styles.loadingText}>Loading your journey...</Text>
+      </View>
     );
+  }
 
-    // Show confetti
-    setShowConfetti(true);
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
+  // Empty state - no roadmap
+  if (!activeRoadmap || !activeRoadmap.actions || activeRoadmap.actions.length === 0) {
+    // Check if this is a new user (no roadmaps at all) or just no active one
+    const isNewUser = (!roadmaps || roadmaps.length === 0);
 
-  const handleAddProof = (action: MicroAction) => {
-    router.push({
-      pathname: '/add-proof',
-      params: { actionId: action.id, actionTitle: action.title },
-    });
-  };
-
-  const handleOpenDeepDive = (action: MicroAction) => {
-    setDeepDiveAction(action);
-    setShowDeepDiveModal(true);
-  };
-
-  const handleDeepDiveComplete = async () => {
-    if (deepDiveAction) {
-      await handleCompleteAction(deepDiveAction.id);
-      setShowDeepDiveModal(false);
-      setDeepDiveAction(null);
-    }
-  };
-
-  const handleCloseDeepDive = () => {
-    setShowDeepDiveModal(false);
-    // Don't clear the action - progress is saved
-  };
-
-  const completedCount = todayActions.filter((a) => a.isCompleted).length;
-  const totalCount = todayActions.length;
-  const progressPercent = totalCount > 0 ? completedCount / totalCount : 0;
-
-  return (
-    <View style={styles.container}>
-      <LinearGradient
-        colors={[colors.midnightNavy, colors.navyLight]}
-        style={[styles.header, { paddingTop: insets.top + spacing.lg }]}
-      >
-        <Text style={styles.headerTitle}>Today&apos;s Bold Moves</Text>
-        <Text style={styles.headerSubtitle}>
-          {completedCount} of {totalCount} completed
-        </Text>
-        <View style={styles.progressContainer}>
-          <ProgressBar
-            progress={progressPercent}
-            height={10}
-            backgroundColor="rgba(255,255,255,0.2)"
-            fillColor={colors.vibrantTeal}
-          />
-        </View>
-      </LinearGradient>
-
-      {/* Synced from Chat Banner */}
-      {syncedCount > 0 && (
-        <Animated.View entering={FadeIn} style={styles.syncedBanner}>
-          <View style={styles.syncedContent}>
-            <Text style={styles.syncedIcon}>✨</Text>
-            <Text style={styles.syncedText}>
-              {syncedCount} action{syncedCount !== 1 ? 's' : ''} added from your chat
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => setSyncedCount(0)}
-            style={styles.dismissButton}
-          >
-            <Text style={styles.dismissText}>×</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Golden Path Roadmap Banner */}
-      {activeRoadmap && (
-        <Animated.View entering={FadeInRight.delay(100)}>
-          <TouchableOpacity
-            style={styles.roadmapBanner}
-            onPress={() => router.push('/roadmap')}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={[colors.midnightNavy, colors.navyLight]}
-              style={styles.roadmapBannerGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <View style={styles.roadmapBannerContent}>
-                <View style={styles.roadmapBannerLeft}>
-                  <View style={styles.roadmapIconContainer}>
-                    <Text style={styles.roadmapIcon}>🗺️</Text>
-                  </View>
-                  <View style={styles.roadmapTextContainer}>
-                    <Text style={styles.roadmapBannerTitle}>
-                      {activeRoadmap.roadmap_title}
-                    </Text>
-                    <Text style={styles.roadmapBannerSubtitle}>
-                      {Math.round(activeProgress * 100)}% complete • Tap to continue
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.roadmapArrowContainer}>
-                  <Text style={styles.roadmapArrow}>›</Text>
-                </View>
-              </View>
-              {/* Mini progress bar */}
-              <View style={styles.roadmapProgressBar}>
-                <View
-                  style={[
-                    styles.roadmapProgressFill,
-                    { width: `${activeProgress * 100}%` },
-                  ]}
-                />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-      {/* Active Deep Dive Banner */}
-      {hasActiveDeepDive && deepDive && !showDeepDiveModal && (
-        <ActiveDeepDiveBanner
-          deepDive={deepDive}
-          onPress={() => {
-            const action = todayActions.find(a => a.id === deepDive.actionId);
-            if (action) {
-              handleOpenDeepDive(action);
-            }
-          }}
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[colors.parchmentWhite, colors.warmCream]}
+          style={StyleSheet.absoluteFill}
         />
-      )}
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentInner}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={styles.sectionTitle}>Micro-Action Cards</Text>
-
-        {(actionsLoading || aiLoading) && todayActions.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.boldTerracotta} />
-            <Text style={styles.loadingText}>Generating your personalized actions...</Text>
-          </View>
-        ) : (
-          <>
-            {todayActions.map((action, index) => (
-              <Animated.View key={action.id} entering={FadeInDown.delay(index * 100)}>
-                <ActionCard
-                  action={action}
-                  onComplete={handleCompleteAction}
-                  onPress={() => {
-                    if (action.isCompleted) {
-                      handleAddProof(action);
-                    } else if (action.isPremium && !isPremium) {
-                      router.push('/paywall');
-                    }
-                  }}
-                  onDeepDive={() => handleOpenDeepDive(action)}
-                  hasActiveDeepDive={deepDive?.actionId === action.id && hasActiveDeepDive}
-                  isLocked={action.isPremium && !isPremium}
-                />
-              </Animated.View>
-            ))}
-          </>
-        )}
-
-        {/* Generate More Actions */}
-        <Animated.View entering={FadeIn.delay(500)} style={styles.generateMore}>
-          <Button
-            title="Generate New Actions"
-            onPress={() => generateActions(user?.dream || 'personal growth', user?.stuckPoint)}
-            variant="outline"
-            loading={aiLoading}
-            style={styles.generateButton}
-          />
-        </Animated.View>
-
-        {/* Create Roadmap CTA */}
-        {!activeRoadmap && user?.dream && (
-          <Animated.View entering={FadeInDown.delay(600)} style={styles.roadmapCTA}>
+        <View style={[styles.emptyContainer, { paddingTop: insets.top + spacing['3xl'] }]}>
+          <Animated.View entering={FadeInDown}>
+            <Text style={styles.emptyIcon}>{isNewUser ? '🎯' : '🌟'}</Text>
+            <Text style={styles.emptyTitle}>
+              {isNewUser ? 'Ready to Start?' : 'All Caught Up!'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {isNewUser
+                ? 'Create your first roadmap to begin your journey toward your dream'
+                : 'You have no active roadmaps right now. Time for a new dream?'}
+            </Text>
+          </Animated.View>
+          <Animated.View entering={FadeInUp.delay(200)} style={styles.emptyAction}>
             <TouchableOpacity
-              style={styles.roadmapCTACard}
-              onPress={() => router.push({
-                pathname: '/roadmap',
-                params: { dream: user.dream, rootMotivation: '' },
-              })}
-              activeOpacity={0.9}
+              style={styles.createButton}
+              onPress={() => router.push('/new-dream')}
+              activeOpacity={0.8}
             >
               <LinearGradient
-                colors={[colors.champagneGold + '15', colors.goldLight + '10']}
-                style={styles.roadmapCTAGradient}
+                colors={[colors.boldTerracotta, colors.terracottaDark]}
+                style={styles.createButtonGradient}
               >
-                <View style={styles.roadmapCTAContent}>
-                  <Text style={styles.roadmapCTAEmoji}>🗺️</Text>
-                  <View style={styles.roadmapCTAText}>
-                    <Text style={styles.roadmapCTATitle}>Create Your Golden Path</Text>
-                    <Text style={styles.roadmapCTASubtitle}>
-                      Transform your dream into a strategic sequence of micro-actions
-                    </Text>
-                  </View>
-                  <Text style={styles.roadmapCTAArrow}>→</Text>
-                </View>
+                <Text style={styles.createButtonText}>
+                  {isNewUser ? 'Start My Journey' : 'Start New Dream'}
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
+
+            {!isNewUser && (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => router.push('/(tabs)/wins')}
+              >
+                <Text style={styles.secondaryButtonText}>View My Wins</Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        </View>
+      </View>
+    );
+  }
+
+  // All complete state
+  if (!currentAction) {
+    return (
+      <View style={styles.container}>
+        <LinearGradient
+          colors={[colors.vibrantTeal, colors.tealLight]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={[styles.celebrateContainer, { paddingTop: insets.top + spacing['3xl'] }]}>
+          <Animated.View entering={FadeInDown}>
+            <Text style={styles.celebrateIcon}>🎉</Text>
+            <Text style={styles.celebrateTitle}>Amazing Work!</Text>
+            <Text style={styles.celebrateSubtitle}>
+              You've completed all your actions for this dream!
+            </Text>
+          </Animated.View>
+          <Animated.View entering={FadeInUp.delay(200)} style={styles.celebrateAction}>
+            <TouchableOpacity
+              style={[styles.secondaryButton, { borderColor: 'rgba(255,255,255,0.5)' }]}
+              onPress={async () => {
+                if (activeRoadmap) {
+                  await updateRoadmapStatus(activeRoadmap.id, 'completed');
+                }
+                router.push('/(tabs)/wins');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.secondaryButtonText, { color: colors.parchmentWhite }]}>View Your Wins 🏆</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </View>
+    );
+  }
+
+  // Main view - show ONE action
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + 100 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.boldTerracotta} />
+        }
+      >
+        {/* Greeting */}
+        <Animated.View entering={FadeIn}>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
+        </Animated.View>
+
+        {/* Main Action Card */}
+        <Animated.View entering={FadeInDown.delay(100)} style={styles.mainCard}>
+          <LinearGradient
+            colors={[colors.parchmentWhite, colors.warmCream]}
+            style={styles.mainCardGradient}
+          >
+            <View style={styles.cardHeader}>
+              <Text style={styles.focusLabel}>🎯 Today's Focus</Text>
+              <Text style={styles.stepIndicator}>
+                Step {completedCount + 1} of {totalCount}
+              </Text>
+            </View>
+
+            <Text style={styles.actionTitle}>{currentAction.title}</Text>
+
+            {currentAction.description && (
+              <Text style={styles.actionDescription} numberOfLines={2}>
+                {currentAction.description}
+              </Text>
+            )}
+
+            <View style={styles.metaRow}>
+              <View style={styles.durationBadge}>
+                <Text style={styles.durationText}>
+                  ⏱️ {currentAction.duration_minutes || 15} min
+                </Text>
+              </View>
+              {currentAction.category && (
+                <Text style={styles.categoryText}>
+                  {currentAction.category.charAt(0).toUpperCase() + currentAction.category.slice(1)}
+                </Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.startButton}
+              onPress={handleStartAction}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={[colors.boldTerracotta, colors.terracottaDark]}
+                style={styles.startButtonGradient}
+              >
+                <Text style={styles.startButtonText}>Start This Action</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* Progress Section */}
+        <Animated.View entering={FadeInDown.delay(200)} style={styles.progressSection}>
+          <Text style={styles.progressLabel}>Your Progress</Text>
+          <View style={styles.progressDots}>
+            {activeRoadmap.actions.map((action, index) => (
+              <View
+                key={action.id}
+                style={[
+                  styles.progressDot,
+                  action.is_completed && styles.progressDotCompleted,
+                  !action.is_completed && index === completedCount && styles.progressDotCurrent,
+                ]}
+              />
+            ))}
+          </View>
+          <Text style={styles.progressText}>
+            {completedCount}/{totalCount} complete
+            {completedCount > 0 && ' • Keep going! 🔥'}
+          </Text>
+        </Animated.View>
+
+        {/* Up Next Preview */}
+        {nextAction && (
+          <Animated.View entering={FadeInDown.delay(300)} style={styles.upNextCard}>
+            <Text style={styles.upNextLabel}>Up Next</Text>
+            <Text style={styles.upNextTitle} numberOfLines={1}>
+              {nextAction.title}
+            </Text>
+            <Text style={styles.upNextDuration}>
+              {nextAction.duration_minutes || 15} min
+            </Text>
           </Animated.View>
         )}
 
-        {/* Today's Progress Summary */}
-        {completedCount > 0 && (
-          <Animated.View entering={FadeInDown} style={styles.summaryCard}>
-            <Card variant="elevated">
-              <View style={styles.summaryContent}>
-                <Text style={styles.summaryEmoji}>🎉</Text>
-                <View style={styles.summaryTextContainer}>
-                  <Text style={styles.summaryTitle}>
-                    {completedCount === totalCount ? 'All done!' : 'Making progress!'}
-                  </Text>
-                  <Text style={styles.summarySubtitle}>
-                    You&apos;ve completed {completedCount} action{completedCount !== 1 ? 's' : ''} today
-                  </Text>
-                </View>
-              </View>
-              {completedCount > 0 && (
-                <Button
-                  title="Add to Proof Gallery"
-                  onPress={() => router.push('/add-proof')}
-                  variant="gold"
-                  size="sm"
-                  gradient
-                  style={styles.proofButton}
-                />
-              )}
-            </Card>
+        {/* Dream Context */}
+        {activeRoadmap.dream && (
+          <Animated.View entering={FadeInDown.delay(400)} style={styles.dreamContext}>
+            <Text style={styles.dreamLabel}>Working toward:</Text>
+            <Text style={styles.dreamText} numberOfLines={2}>
+              "{activeRoadmap.dream}"
+            </Text>
           </Animated.View>
         )}
       </ScrollView>
 
-      {/* Add Action FAB */}
-      <TouchableOpacity
-        style={[styles.fab, { bottom: insets.bottom + 90 }]}
-        onPress={() => router.push('/add-action')}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={[colors.boldTerracotta, colors.terracottaDark]}
-          style={styles.fabGradient}
-        >
-          <Text style={styles.fabIcon}>+</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-
       {/* Confetti */}
-      <ConfettiAnimation
-        active={showConfetti}
-        onComplete={() => setShowConfetti(false)}
-      />
+      <ConfettiAnimation active={showConfetti} onComplete={() => setShowConfetti(false)} />
 
-      {/* Deep Dive Modal */}
-      <DeepDiveModal
-        visible={showDeepDiveModal}
-        action={deepDiveAction}
-        onClose={handleCloseDeepDive}
-        onComplete={handleDeepDiveComplete}
+      {/* Focus Mode Modal */}
+      <FocusModeModal
+        visible={showFocusMode}
+        action={selectedAction}
+        onClose={handleCloseFocusMode}
+        onComplete={handleComplete}
+        onSubActionComplete={handleSubActionComplete}
+        onRefine={() => { }}
+        onBreakDown={() => { }}
+        onCaptureProof={() => { }}
+        isRefining={false}
+        isBreakingDown={false}
+        hasProof={false}
       />
     </View>
   );
@@ -392,255 +353,268 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.parchmentWhite,
   },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing['2xl'],
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  headerTitle: {
-    fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['4xl'],
-    color: colors.white,
-    marginBottom: spacing.sm,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.base,
-    color: 'rgba(255,255,255,0.85)',
-    marginBottom: spacing.xl,
-  },
-  progressContainer: {
-    marginTop: spacing.xs,
-  },
-  content: {
+  scrollView: {
     flex: 1,
   },
-  contentInner: {
-    padding: spacing.xl,
-    paddingBottom: 180,
-  },
-  sectionTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-    marginBottom: spacing.xl,
-    letterSpacing: -0.2,
-  },
-  loadingContainer: {
-    alignItems: 'center',
-    paddingVertical: spacing['3xl'],
+  scrollContent: {
+    paddingHorizontal: spacing.xl,
   },
   loadingText: {
+    marginTop: spacing.lg,
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.base,
-    color: colors.gray600,
-    marginTop: spacing.md,
-  },
-  generateMore: {
-    marginTop: spacing.xl,
-    alignItems: 'center',
-  },
-  generateButton: {
-    minWidth: 200,
-  },
-  summaryCard: {
-    marginTop: spacing['2xl'],
-  },
-  summaryContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  summaryEmoji: {
-    fontSize: 44,
-    marginRight: spacing.lg,
-  },
-  summaryTextContainer: {
-    flex: 1,
-  },
-  summaryTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.xl,
-    color: colors.midnightNavy,
-    marginBottom: 2,
-  },
-  summarySubtitle: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.base,
-    color: colors.gray600,
-    lineHeight: 22,
-  },
-  proofButton: {
-    marginTop: spacing.md,
-  },
-  fab: {
-    position: 'absolute',
-    right: spacing.xl,
-    ...shadows.xl,
-  },
-  fabGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fabIcon: {
-    fontSize: 32,
-    color: colors.white,
-    fontWeight: '300',
-    marginTop: -1,
-  },
-  syncedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
-    padding: spacing.md,
-    backgroundColor: colors.champagneGold + '20',
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: colors.champagneGold + '40',
-  },
-  syncedContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    flex: 1,
-  },
-  syncedIcon: {
-    fontSize: 16,
-  },
-  syncedText: {
-    fontFamily: typography.fontFamily.bodyMedium,
-    fontSize: typography.fontSize.sm,
-    color: colors.terracottaDark,
-    flex: 1,
-  },
-  dismissButton: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dismissText: {
-    fontSize: 18,
     color: colors.gray500,
-    fontWeight: '300',
   },
-  // Roadmap Banner styles
-  roadmapBanner: {
-    marginHorizontal: spacing.lg,
-    marginVertical: spacing.sm,
+  // Greeting
+  greeting: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.midnightNavy,
+    marginBottom: spacing.xl,
+  },
+  // Main Action Card
+  mainCard: {
     borderRadius: borderRadius['2xl'],
     overflow: 'hidden',
     ...shadows.lg,
+    marginBottom: spacing.xl,
   },
-  roadmapBannerGradient: {
-    padding: spacing.lg,
+  mainCardGradient: {
+    padding: spacing.xl,
   },
-  roadmapBannerContent: {
+  cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  roadmapBannerLeft: {
-    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: spacing.lg,
   },
-  roadmapIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  roadmapIcon: {
-    fontSize: 22,
-  },
-  roadmapTextContainer: {
-    flex: 1,
-  },
-  roadmapBannerTitle: {
+  focusLabel: {
     fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.white,
-    marginBottom: 2,
+    fontSize: typography.fontSize.sm,
+    color: colors.boldTerracotta,
   },
-  roadmapBannerSubtitle: {
+  stepIndicator: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.xs,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.gray500,
   },
-  roadmapArrowContainer: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  actionTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.midnightNavy,
+    marginBottom: spacing.sm,
+    lineHeight: 32,
   },
-  roadmapArrow: {
-    fontSize: 18,
-    color: colors.white,
-    fontWeight: '300',
-    marginTop: -1,
+  actionDescription: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.gray600,
+    marginBottom: spacing.lg,
+    lineHeight: 22,
   },
-  roadmapProgressBar: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  roadmapProgressFill: {
-    height: '100%',
-    backgroundColor: colors.champagneGold,
-    borderRadius: 2,
-  },
-  // Create Roadmap CTA styles
-  roadmapCTA: {
-    marginTop: spacing.xl,
-  },
-  roadmapCTACard: {
-    borderRadius: borderRadius['2xl'],
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: colors.champagneGold + '40',
-  },
-  roadmapCTAGradient: {
-    padding: spacing.lg,
-  },
-  roadmapCTAContent: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
   },
-  roadmapCTAEmoji: {
-    fontSize: 32,
-    marginRight: spacing.md,
+  durationBadge: {
+    backgroundColor: colors.gray100,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
-  roadmapCTAText: {
-    flex: 1,
-  },
-  roadmapCTATitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.midnightNavy,
-    marginBottom: 2,
-  },
-  roadmapCTASubtitle: {
-    fontFamily: typography.fontFamily.body,
+  durationText: {
+    fontFamily: typography.fontFamily.bodyMedium,
     fontSize: typography.fontSize.sm,
     color: colors.gray600,
-    lineHeight: 20,
   },
-  roadmapCTAArrow: {
-    fontSize: 20,
-    color: colors.champagneGold,
-    marginLeft: spacing.sm,
+  categoryText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+  },
+  startButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+  startButtonGradient: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  startButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.lg,
+    color: colors.parchmentWhite,
+  },
+  // Progress Section
+  progressSection: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  progressLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginBottom: spacing.md,
+  },
+  progressDots: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  progressDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.gray200,
+  },
+  progressDotCompleted: {
+    backgroundColor: colors.vibrantTeal,
+  },
+  progressDotCurrent: {
+    backgroundColor: colors.boldTerracotta,
+  },
+  progressText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+  },
+  // Up Next Card
+  upNextCard: {
+    backgroundColor: colors.gray100,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  upNextLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray400,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: spacing.xs,
+  },
+  upNextTitle: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+  },
+  upNextDuration: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    marginTop: spacing.xs,
+  },
+  // Dream Context
+  dreamContext: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+  },
+  dreamLabel: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray400,
+    marginBottom: spacing.xs,
+  },
+  dreamText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.gray600,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  // Empty State
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  emptyTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['2xl'],
+    color: colors.midnightNavy,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptySubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.gray600,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  emptyAction: {
+    marginTop: spacing['2xl'],
+    width: '100%',
+  },
+  createButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+  },
+  createButtonGradient: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  createButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.lg,
+    color: colors.parchmentWhite,
+  },
+  // Celebrate State
+  celebrateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  celebrateIcon: {
+    fontSize: 80,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  celebrateTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize['3xl'],
+    color: colors.parchmentWhite,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  celebrateSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.lg,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  celebrateAction: {
+    marginTop: spacing['2xl'],
+  },
+  secondaryButton: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    alignItems: 'center',
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.boldTerracotta,
+    backgroundColor: 'transparent',
+  },
+  secondaryButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.lg,
+    color: colors.boldTerracotta,
   },
 });

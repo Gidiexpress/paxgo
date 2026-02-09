@@ -1,4 +1,4 @@
-import { generateText } from '@fastshot/ai';
+import { generateTextGroq } from './groq';
 
 // Dialogue step tracking for Socratic method
 export type DialogueStep = 1 | 2 | 3 | 4;
@@ -322,7 +322,7 @@ User's latest message: "${userMessage}"
 AI Coach's response (following the current step instructions exactly):`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     if (!response) {
       throw new Error('Empty response from AI');
@@ -376,7 +376,7 @@ Generate 3 short options (4-8 words each) that would help them express what they
 Example: ["I feel overwhelmed", "I'm not sure what I want", "There's something deeper"]`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
     const match = response?.match(/\[[\s\S]*\]/);
     if (match) {
       return JSON.parse(match[0]);
@@ -414,7 +414,7 @@ Return ONLY a JSON object:
 {"title": "...", "description": "...", "duration": 5, "category": "reflection|action|connection|research|planning", "limitingBelief": "..."}`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
     const match = response?.match(/\{[\s\S]*\}/);
     if (match) {
       const parsed = JSON.parse(match[0]);

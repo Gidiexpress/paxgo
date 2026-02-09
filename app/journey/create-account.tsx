@@ -73,8 +73,8 @@ export default function CreateAccountScreen() {
     // 1. The database trigger has created the user profile
     // 2. Auth state is fully settled
     setTimeout(() => {
-      console.log('✅ Navigating to /journey/five-whys-chat');
-      router.replace('/journey/five-whys-chat');
+      console.log('✅ Navigating to /(tabs)');
+      router.replace('/(tabs)');
     }, 800); // Allow time for trigger to complete
   }, [isNavigating, router, showSuccess]);
 
@@ -722,7 +722,7 @@ export default function CreateAccountScreen() {
           style={styles.manualContinueButton}
           onPress={() => {
             setIsNavigating(true);
-            router.replace('/journey/five-whys-chat');
+            router.replace('/(tabs)');
           }}
         >
           <LinearGradient
@@ -771,19 +771,19 @@ export default function CreateAccountScreen() {
               {authMode === 'social'
                 ? 'Save Your Journey'
                 : authMode === 'email-signup'
-                ? 'Create Your Account'
-                : authMode === 'forgot-password'
-                ? 'Reset Password'
-                : 'Welcome Back'}
+                  ? 'Create Your Account'
+                  : authMode === 'forgot-password'
+                    ? 'Reset Password'
+                    : 'Welcome Back'}
             </Text>
             <Text style={styles.subtitle}>
               {authMode === 'social'
                 ? 'Create an account to save your progress and unlock personalized coaching'
                 : authMode === 'email-signup'
-                ? 'Start your transformation journey today'
-                : authMode === 'forgot-password'
-                ? 'No worries, we\'ll help you get back in'
-                : 'Sign in to continue your journey'}
+                  ? 'Start your transformation journey today'
+                  : authMode === 'forgot-password'
+                    ? 'No worries, we\'ll help you get back in'
+                    : 'Sign in to continue your journey'}
             </Text>
           </Animated.View>
 

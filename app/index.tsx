@@ -52,14 +52,9 @@ export default function Index() {
     );
   }
 
-  // Authenticated users who completed onboarding → main app
-  if (isAuthenticated && onboardingComplete) {
-    return <Redirect href="/(tabs)" />;
-  }
-
-  // Authenticated users who haven't completed onboarding → five whys chat
-  if (isAuthenticated && onboardingComplete === false) {
-    return <Redirect href="/journey/five-whys-chat" />;
+  // All authenticated users go to Today tab (action)
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)/action" />;
   }
 
   // Not authenticated users → journey flow (which leads to auth)

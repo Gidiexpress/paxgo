@@ -89,12 +89,12 @@ export function RoadmapActionCard({
 
   const handlePressIn = () => {
     setIsPressed(true);
-    scale.value = withSpring(0.98, { damping: 15 });
+    scale.value = withSpring(0.98, { damping: 25, stiffness: 200 });
   };
 
   const handlePressOut = () => {
     setIsPressed(false);
-    scale.value = withSpring(1, { damping: 15 });
+    scale.value = withSpring(1, { damping: 25, stiffness: 200 });
   };
 
   const animatedCardStyle = useAnimatedStyle(() => ({
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
-    backdropFilter: 'blur(10px)',
+
   },
   lockIcon: {
     width: 56,

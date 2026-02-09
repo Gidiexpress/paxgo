@@ -37,28 +37,28 @@ export default function GenerateRoadmapScreen() {
         // Generate the roadmap
         const result = await createRoadmap(dream, rootMotivation);
 
-        // Check if result is an error object (schema validation failed)
-        if (result && typeof result === 'object' && 'error' in result) {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          setErrorDetails({
-            message: result.message || 'Unable to create your roadmap',
-            instructions: result.instructions,
-            errorType: result.errorType,
-          });
-          setShowError(true);
-          return;
+        // Check if result is valid
+        if (!result) {
+          throw new Error('Failed to generate roadmap');
         }
 
         if (!result) {
           throw new Error('Failed to generate roadmap');
         }
 
-        // Success! Navigate to roadmap screen
+        // Success! Navigate to roadmap screen with the roadmap ID
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Small delay to let the user appreciate the animation
+        // Delay to ensure database write completes before navigation
         setTimeout(() => {
-          router.replace('/roadmap');
-        }, 1500);
+          router.replace({
+            pathname: '/roadmap',
+            params: {
+              roadmapId: result.id,
+              dream: params.dream || '',
+              rootMotivation: params.rootMotivation || ''
+            }
+          });
+        }, 2500); // Increased delay to ensure DB write completes
       } catch (error: any) {
         console.error('Roadmap generation failed:', error);
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

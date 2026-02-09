@@ -26,7 +26,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { useDreams } from '@/hooks/useDreams';
-import { useTextGeneration } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import { DREAM_CATEGORIES } from '@/types/dreams';
 
 interface Message {
@@ -42,7 +42,7 @@ export default function NewDreamDialogueScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const { dreams, updateDream, addDreamChatMessage } = useDreams();
-  const { generateText, isLoading } = useTextGeneration();
+  const { generateText, isLoading } = useGroq();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');

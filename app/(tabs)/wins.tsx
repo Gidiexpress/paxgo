@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,14 +17,16 @@ import { colors, typography, borderRadius, spacing, shadows } from '@/constants/
 import { Card } from '@/components/ui/Card';
 import { DreamMap } from '@/components/DreamMap';
 import { ProofWallMasonry } from '@/components/ProofWallMasonry';
-import { useProofs, useDreamProgress } from '@/hooks/useStorage';
-import { useSubscription } from '@/hooks/useSubscription';
-import { usePermissionSlips } from '@/hooks/usePermissionSlips';
+import { useProofs } from '@/hooks/useStorage';
 import { ProofEntry } from '@/types';
+import { useRoadmap } from '@/hooks/useRoadmap'; // Hook for roadmaps
 import { Badge } from '@/components/ui/Badge';
 import { PermissionSlipCard } from '@/components/PermissionSlipCard';
 import { DigitalPermissionSlip } from '@/components/DigitalPermissionSlip';
 import { PermissionSlip, PermissionSlipVisualStyle } from '@/types/database';
+import { DREAM_CATEGORIES, DreamCategory } from '@/types/dreams';
+import { useSubscription } from '@/hooks/useSubscription';
+import { usePermissionSlips } from '@/hooks/usePermissionSlips';
 
 // Milestone badges
 const milestones = [
@@ -41,7 +43,12 @@ export default function WinsScreen() {
   const insets = useSafeAreaInsets();
 
   const { proofs } = useProofs();
-  const { progress } = useDreamProgress();
+  const {
+    activeRoadmap,
+    roadmaps,
+    completedCount: roadmapCompletedCount,
+    totalCount: roadmapTotalCount
+  } = useRoadmap();
   const { isPremium } = useSubscription();
   const { permissionSlips } = usePermissionSlips();
 
@@ -49,8 +56,15 @@ export default function WinsScreen() {
   const [showProofWall, setShowProofWall] = useState(false);
   const [selectedPermissionSlip, setSelectedPermissionSlip] = useState<PermissionSlip | null>(null);
 
-  const completedCount = progress?.completedActions || 0;
-  const dreamProgress = Math.min((completedCount / 50) * 100, 100) / 100; // Progress to 50 actions
+  // Completed roadmaps
+  const completedRoadmaps = useMemo(() => {
+    return roadmaps.filter(r => r.status === 'completed');
+  }, [roadmaps]);
+
+  // Derive display stats from active/roadmap data
+  const completedCount = roadmapCompletedCount;
+  // Progress is explicitly calculated from total actions in roadmap
+  const dreamProgress = roadmapTotalCount > 0 ? completedCount / roadmapTotalCount : 0;
 
   const nextMilestone = milestones.find((m) => completedCount < m.required);
 
@@ -81,7 +95,11 @@ export default function WinsScreen() {
 
         {/* Dream Map */}
         <Animated.View entering={FadeInDown.delay(100)} style={styles.mapContainer}>
-          <DreamMap progress={dreamProgress} destination="Your Dream" />
+          <DreamMap
+            progress={dreamProgress}
+            destination={activeRoadmap?.dream || "Your Dream"}
+            proofs={proofs} // Pass proofs to map if supported
+          />
         </Animated.View>
 
         {/* Milestones */}
@@ -137,7 +155,7 @@ export default function WinsScreen() {
               <Text style={styles.statLabel}>Actions Done</Text>
             </Card>
             <Card style={styles.statCard}>
-              <Text style={styles.statNumber}>{progress?.currentStreak || 0}</Text>
+              <Text style={styles.statNumber}>0</Text>
               <Text style={styles.statLabel}>Day Streak</Text>
             </Card>
             <Card style={styles.statCard}>
@@ -146,6 +164,57 @@ export default function WinsScreen() {
             </Card>
           </View>
         </Animated.View>
+
+        {/* Completed Dreams (Roadmaps) Section */}
+        {completedRoadmaps.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(320)} style={styles.completedDreamsSection}>
+            <Text style={styles.sectionTitle}>Completed Dreams</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.completedDreamsScroll}
+            >
+              {completedRoadmaps.map((map) => {
+                // Infer category from first action or default
+                const firstAction = map.actions && map.actions[0];
+                const category = firstAction?.category || 'career';
+                const categoryInfo = DREAM_CATEGORIES[category as DreamCategory] || DREAM_CATEGORIES.career;
+
+                const completedActions = map.actions?.filter(a => a.is_completed).length || 0;
+
+                return (
+                  <TouchableOpacity key={map.id} activeOpacity={0.9}>
+                    <LinearGradient
+                      colors={[colors.white, '#FAF9F6']}
+                      style={styles.completedDreamCard}
+                    >
+                      <View style={styles.completedDreamHeader}>
+                        <View style={[styles.completedDreamIconContainer, { backgroundColor: categoryInfo.gradient[0] + '20' }]}>
+                          <Text style={styles.completedDreamIcon}>{categoryInfo.icon}</Text>
+                        </View>
+                        <View style={styles.completedBadge}>
+                          <Text style={styles.completedBadgeText}>COMPLETED</Text>
+                        </View>
+                      </View>
+
+                      <Text style={styles.completedDreamTitle} numberOfLines={2}>{map.dream}</Text>
+                      <Text style={styles.completedDreamDate}>
+                        Achieved {new Date(map.updated_at || map.created_at || Date.now()).toLocaleDateString()}
+                      </Text>
+
+                      <View style={styles.completedDreamStats}>
+                        <Text style={styles.completedDreamStatText}>
+                          <Text style={{ fontWeight: 'bold' }}>{completedActions}</Text> actions
+                        </Text>
+                        <Text style={styles.completedDreamStatText}>🏆 Win</Text>
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        )}
 
         {/* Next Milestone */}
         {nextMilestone && (
@@ -297,33 +366,10 @@ export default function WinsScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Obsidian Vault Link */}
-          <TouchableOpacity
-            style={styles.vaultLink}
-            onPress={() => router.push('/vault')}
-            activeOpacity={0.9}
-          >
-            <LinearGradient
-              colors={['#1A1A2E', '#16213E']}
-              style={styles.vaultLinkGradient}
-            >
-              <View style={styles.vaultLinkContent}>
-                <Text style={styles.vaultLinkIcon}>🔒</Text>
-                <View style={styles.vaultLinkText}>
-                  <Text style={styles.vaultLinkTitle}>Obsidian Vault</Text>
-                  <Text style={styles.vaultLinkSubtitle}>
-                    Archive of sealed achievements
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.vaultLinkArrow}>›</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {/* Archive Link */}
+          {/* Archive / Vault Link */}
           <TouchableOpacity
             style={[styles.archiveLink, !isPremium && styles.archiveLinkLocked]}
-            onPress={() => router.push('/archive')}
+            onPress={() => router.push(isPremium ? '/vault' : '/archive')}
             activeOpacity={0.9}
           >
             <View style={styles.archiveLinkContent}>
@@ -332,8 +378,8 @@ export default function WinsScreen() {
                 <Text style={styles.archiveLinkTitle}>The Archive</Text>
                 <Text style={styles.archiveLinkSubtitle}>
                   {isPremium
-                    ? 'Browse your complete journey history'
-                    : 'Unlock with Bold Adventurer'}
+                    ? 'Your sealed achievements & history'
+                    : 'Unlock to access your full history'}
                 </Text>
               </View>
             </View>
@@ -681,6 +727,95 @@ const styles = StyleSheet.create({
   proofSection: {
     marginBottom: spacing.xl,
   },
+  // Completed Dreams Styles
+  completedDreamsSection: {
+    marginBottom: spacing['2xl'],
+  },
+  completedDreamsScroll: {
+    paddingRight: spacing.lg,
+  },
+  completedDreamCard: {
+    width: 200,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginRight: spacing.md,
+    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.gray100,
+  },
+  completedDreamHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  completedDreamIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completedDreamIcon: {
+    fontSize: 20,
+  },
+  completedBadge: {
+    backgroundColor: colors.vibrantTeal + '20',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  completedBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: colors.vibrantTeal,
+  },
+  completedDreamTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+    marginBottom: spacing.xs,
+    height: 40, // fix height for 2 lines
+  },
+  completedDreamDate: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray500,
+    marginBottom: spacing.md,
+  },
+  completedDreamStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: colors.gray100,
+    paddingTop: spacing.sm,
+  },
+  completedDreamStatText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray600,
+  },
+  emptyDreamsState: {
+    padding: spacing.lg,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderStyle: 'dashed',
+  },
+  emptyDreamsIcon: {
+    fontSize: 24,
+    marginBottom: spacing.sm,
+  },
+  emptyDreamsText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray500,
+    textAlign: 'center',
+  },
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -902,45 +1037,6 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: 24,
     color: colors.gray400,
-  },
-  // Vault Link Styles
-  vaultLink: {
-    borderRadius: borderRadius.xl,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
-    ...shadows.lg,
-  },
-  vaultLinkGradient: {
-    padding: spacing.lg,
-  },
-  vaultLinkContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  vaultLinkIcon: {
-    fontSize: 32,
-    marginRight: spacing.md,
-  },
-  vaultLinkText: {
-    flex: 1,
-  },
-  vaultLinkTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.champagneGold,
-  },
-  vaultLinkSubtitle: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.sm,
-    color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 2,
-  },
-  vaultLinkArrow: {
-    position: 'absolute',
-    right: spacing.lg,
-    fontFamily: typography.fontFamily.body,
-    fontSize: 24,
-    color: colors.champagneGold,
   },
   // Permission Slips Section Styles
   permissionSlipsSection: {

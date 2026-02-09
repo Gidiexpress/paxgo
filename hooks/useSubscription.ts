@@ -1,89 +1,97 @@
 import { useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Purchases, { CustomerInfo } from 'react-native-purchases';
+import { useAuth } from '@fastshot/auth';
+import { REVENUECAT_CONFIG } from '@/constants/sub-config';
+import { Alert } from 'react-native';
 
-const SUBSCRIPTION_KEY = '@boldmove_subscription';
-
-export type SubscriptionTier = 'seeker' | 'bold-adventurer' | 'sprint';
+export type SubscriptionTier = 'seeker' | 'bold-adventurer';
 
 export interface SubscriptionState {
   tier: SubscriptionTier;
-  expiresAt?: string;
   isActive: boolean;
+  isTrial?: boolean;
+  expiresAt?: string | null;
+  customerInfo: CustomerInfo | null;
+  isLoading: boolean;
 }
 
 const defaultSubscription: SubscriptionState = {
   tier: 'seeker',
-  isActive: true,
+  isActive: false,
+  customerInfo: null,
+  isLoading: true,
 };
 
 export function useSubscription() {
+  const { user } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionState>(defaultSubscription);
-  const [loading, setLoading] = useState(true);
 
-  // Load subscription from storage
-  useEffect(() => {
-    const loadSubscription = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(SUBSCRIPTION_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as SubscriptionState;
-          // Check if subscription is still active
-          if (parsed.expiresAt) {
-            const expiresAt = new Date(parsed.expiresAt);
-            if (expiresAt < new Date()) {
-              // Subscription expired, reset to free tier
-              await AsyncStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(defaultSubscription));
-              setSubscription(defaultSubscription);
-            } else {
-              setSubscription(parsed);
-            }
-          } else {
-            setSubscription(parsed);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading subscription:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadSubscription();
+  // Daily AI limit (local logic for free users)
+  const [dailyAIUsage, setDailyAIUsage] = useState(0);
+  const dailyAILimit = 3;
+
+  // Check entitlement from CustomerInfo
+  const updateSubscriptionState = useCallback((customerInfo: CustomerInfo) => {
+    const entitlement = customerInfo.entitlements.active[REVENUECAT_CONFIG.entitlementId];
+
+    setSubscription({
+      tier: entitlement ? 'bold-adventurer' : 'seeker',
+      isActive: !!entitlement,
+      expiresAt: customerInfo.latestExpirationDate,
+      customerInfo: customerInfo,
+      isLoading: false,
+    });
   }, []);
 
-  // Update subscription
-  const updateSubscription = useCallback(async (newSubscription: Partial<SubscriptionState>) => {
-    const updated = { ...subscription, ...newSubscription };
-    setSubscription(updated);
-    await AsyncStorage.setItem(SUBSCRIPTION_KEY, JSON.stringify(updated));
-  }, [subscription]);
+  // Initialize and listen for updates
+  useEffect(() => {
+    const init = async () => {
+      try {
+        // Identify user in RevenueCat if logged in
+        if (user?.id) {
+          await Purchases.logIn(user.id);
+        }
 
-  // Purchase subscription (mock implementation)
-  const purchaseSubscription = useCallback(async (tier: SubscriptionTier) => {
-    let expiresAt: string | undefined;
+        Purchases.addCustomerInfoUpdateListener((info) => {
+          updateSubscriptionState(info);
+        });
 
-    if (tier === 'bold-adventurer') {
-      // Monthly subscription - expires in 30 days
-      const date = new Date();
-      date.setDate(date.getDate() + 30);
-      expiresAt = date.toISOString();
-    } else if (tier === 'sprint') {
-      // 7-day sprint
-      const date = new Date();
-      date.setDate(date.getDate() + 7);
-      expiresAt = date.toISOString();
+        const customerInfo = await Purchases.getCustomerInfo();
+        updateSubscriptionState(customerInfo);
+      } catch (e) {
+        console.error('Error fetching customer info:', e);
+        setSubscription(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    init();
+
+    // Cleanup is handled by the SDK singleton nature usually, but good practice to remove if needed
+    // Purchases.removeCustomerInfoUpdateListener(listener); 
+  }, [user?.id, updateSubscriptionState]);
+
+  // Restore purchases
+  const restorePermissions = async () => {
+    try {
+      setSubscription(prev => ({ ...prev, isLoading: true }));
+      const customerInfo = await Purchases.restorePurchases();
+      updateSubscriptionState(customerInfo);
+
+      if (customerInfo.entitlements.active[REVENUECAT_CONFIG.entitlementId]) {
+        Alert.alert('Success', 'Your purchases have been restored.');
+      } else {
+        Alert.alert('Notice', 'No active subscriptions found to restore.');
+      }
+      return customerInfo;
+    } catch (e: any) {
+      console.error('Error restoring purchases:', e);
+      Alert.alert('Error', `Restore failed: ${e.message}`);
+      setSubscription(prev => ({ ...prev, isLoading: false }));
+      throw e;
     }
+  };
 
-    await updateSubscription({
-      tier,
-      expiresAt,
-      isActive: true,
-    });
-
-    return true;
-  }, [updateSubscription]);
-
-  // Check if user has premium features
-  const isPremium = subscription.tier === 'bold-adventurer' || subscription.tier === 'sprint';
+  const isPremium = subscription.isActive;
 
   // Feature access checks
   const canAccessUnlimitedAI = isPremium;
@@ -91,10 +99,6 @@ export function useSubscription() {
   const canAccessFullArchive = isPremium;
   const canAccessExclusiveMaps = isPremium;
   const canAccessPremiumActions = isPremium;
-
-  // Daily AI limit for free users
-  const [dailyAIUsage, setDailyAIUsage] = useState(0);
-  const dailyAILimit = 3;
 
   const incrementAIUsage = useCallback(async () => {
     if (!isPremium) {
@@ -107,9 +111,9 @@ export function useSubscription() {
 
   return {
     subscription,
-    loading,
+    isLoading: subscription.isLoading,
     isPremium,
-    purchaseSubscription,
+    restorePermissions,
     canAccessUnlimitedAI,
     canAccessHypeSquad,
     canAccessFullArchive,

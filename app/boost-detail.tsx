@@ -23,7 +23,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { useBoostStore } from '@/hooks/useBoostStore';
-import { useTextGeneration } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import { BOOST_CATALOG, getBoostTypeLabel, BoostProduct, BoostContent } from '@/types/boosts';
 import { ConfettiAnimation } from '@/components/ConfettiAnimation';
 
@@ -32,7 +32,7 @@ export default function BoostDetailScreen() {
   const insets = useSafeAreaInsets();
   const { boostId } = useLocalSearchParams<{ boostId: string }>();
   const { isPremium, isBoostPurchased, purchaseBoost } = useBoostStore();
-  const { generateText, isLoading: isGenerating } = useTextGeneration();
+  const { generateText, isLoading: isGenerating } = useGroq();
 
   const [boost, setBoost] = useState<BoostProduct | null>(null);
   const [isPurchasing, setIsPurchasing] = useState(false);

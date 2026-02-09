@@ -23,7 +23,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import { useAuth } from '@fastshot/auth';
-import { useTextGeneration } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import {
   colors,
   typography,
@@ -53,7 +53,7 @@ export default function PermissionSlipScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { generateText, isLoading: aiLoading } = useTextGeneration();
+  const { generateText, isLoading: aiLoading } = useGroq();
   const permissionSlipRef = useRef<View>(null);
 
   // State
@@ -323,8 +323,8 @@ Keep it elegant and personal. No emojis.`;
             {step === 'style'
               ? 'Select a visual style for your permission slip'
               : step === 'preview'
-              ? 'Sign to make it official'
-              : 'Your commitment is sealed'}
+                ? 'Sign to make it official'
+                : 'Your commitment is sealed'}
           </Text>
         </Animated.View>
 

@@ -1,8 +1,9 @@
+-- AUTHORITATIVE SCHEMA SOURCE
+-- This file acts as the single source of truth for the database schema.
+-- (Merged from legacy users table schema and partial profiles schema)
+
 -- =============================================================================
 -- THE BOLD MOVE - Complete Supabase Database Schema
--- =============================================================================
--- This script creates all tables necessary for the app's boutique features.
--- Run this in your Supabase SQL Editor to initialize your personal database.
 -- =============================================================================
 
 -- Enable UUID extension (usually enabled by default)

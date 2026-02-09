@@ -16,6 +16,7 @@ import Animated, {
   FadeInUp,
   FadeOut,
   SlideInDown,
+  ZoomIn,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -24,12 +25,16 @@ import * as Haptics from 'expo-haptics';
 import { colors, typography, spacing, shadows, borderRadius } from '@/constants/theme';
 import { RoadmapAction } from '@/types/database';
 import { Button } from '@/components/ui/Button';
+import { ConfettiAnimation } from '@/components/ConfettiAnimation';
+import { SnackbarItem } from '@/components/Snackbar';
+import { SnackbarConfig } from '@/contexts/SnackbarContext';
 
 interface FocusModeModalProps {
   visible: boolean;
   action: RoadmapAction | null;
   onClose: () => void;
   onComplete: (actionId: string) => void;
+  onSubActionComplete?: (subActionId: string) => Promise<void>;
   onRefine: (actionId: string, feedback?: string) => void;
   onBreakDown: (actionId: string) => void;
   onCaptureProof: (actionId: string) => void;
@@ -51,6 +56,7 @@ export function FocusModeModal({
   action,
   onClose,
   onComplete,
+  onSubActionComplete,
   onRefine,
   onBreakDown,
   onCaptureProof,
@@ -61,10 +67,18 @@ export function FocusModeModal({
   const insets = useSafeAreaInsets();
   const [showRefineInput, setShowRefineInput] = useState(false);
   const [refineFeedback, setRefineFeedback] = useState('');
+  const [expandedSubActionId, setExpandedSubActionId] = useState<string | null>(null);
+  const [justCompletedId, setJustCompletedId] = useState<string | null>(null);
+  const [showMiniConfetti, setShowMiniConfetti] = useState(false);
+  const [localSnackbar, setLocalSnackbar] = useState<SnackbarConfig | null>(null);
 
   if (!action) return null;
 
   const categoryIcon = CATEGORY_ICONS[action.category || 'action'] || '⚡';
+
+  // Check if all sub-actions are completed (for Option B logic)
+  const hasIncompleteSubActions = action.subActions && action.subActions.length > 0 &&
+    action.subActions.some(sa => !sa.is_completed);
 
   const handleComplete = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -112,7 +126,7 @@ export function FocusModeModal({
           />
 
           <Animated.View
-            entering={SlideInDown.springify().damping(18)}
+            entering={SlideInDown.duration(300)}
             style={[styles.modalContainer, { paddingBottom: insets.bottom + spacing.lg }]}
           >
             {/* Header with close button */}
@@ -185,6 +199,124 @@ export function FocusModeModal({
                 </Animated.View>
               )}
 
+              {/* Sub-Actions Checklist */}
+              {action.subActions && action.subActions.length > 0 && (
+                <View style={styles.subActionsCard}>
+                  <View style={styles.subActionsHeader}>
+                    <Text style={styles.subActionsIcon}>✓</Text>
+                    <Text style={styles.subActionsTitle}>Small Steps to Complete</Text>
+                    <Text style={styles.subActionsProgress}>
+                      {action.subActions?.filter(sa => sa.is_completed).length || 0}/{action.subActions?.length || 0}
+                    </Text>
+                  </View>
+
+                  {action.subActions?.map((subAction, index) => {
+                    const isExpanded = expandedSubActionId === subAction.id;
+                    const isCompleted = subAction.is_completed;
+                    const isJustCompleted = justCompletedId === subAction.id;
+
+                    return (
+                      <View key={subAction.id} style={styles.subActionItemContainer}>
+                        {/* Sub-action header (always visible) */}
+                        <View style={styles.subActionItem}>
+                          <View style={[
+                            styles.subActionCheckbox,
+                            isCompleted && styles.subActionCheckboxCompleted
+                          ]}>
+                            {isCompleted && (
+                              <Text style={styles.subActionCheckmark}>✓</Text>
+                            )}
+                          </View>
+
+                          <TouchableOpacity
+                            style={styles.subActionContent}
+                            onPress={() => setExpandedSubActionId(isExpanded ? null : subAction.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[
+                              styles.subActionTitle,
+                              isCompleted && styles.subActionTitleCompleted
+                            ]}>
+                              {subAction.title}
+                            </Text>
+                            {subAction.duration_minutes && (
+                              <Text style={styles.subActionDuration}>
+                                {subAction.duration_minutes} min
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+
+                          {/* Do This Now or expand/collapse button */}
+                          {!isCompleted && (
+                            <TouchableOpacity
+                              onPress={() => setExpandedSubActionId(isExpanded ? null : subAction.id)}
+                              style={styles.doThisNowButton}
+                            >
+                              <Text style={styles.doThisNowText}>
+                                {isExpanded ? 'Hide ▲' : 'Do This Now →'}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Expanded detail view */}
+                        {isExpanded && (
+                          <Animated.View
+                            entering={FadeIn.duration(200)}
+                            exiting={FadeOut.duration(150)}
+                            style={styles.subActionExpanded}
+                          >
+                            <Text style={styles.subActionExpandedText}>
+                              {subAction.description && subAction.description.trim() !== ''
+                                ? subAction.description
+                                : "No details available for this step."}
+                            </Text>
+                            <TouchableOpacity
+                              onPress={async () => {
+                                await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setJustCompletedId(subAction.id);
+                                setExpandedSubActionId(null);
+
+                                // Show mini confetti celebration
+                                setShowMiniConfetti(true);
+
+                                // Show local snackbar
+                                setLocalSnackbar({
+                                  id: Date.now().toString(),
+                                  type: 'success',
+                                  message: 'Tiny step complete! One step closer. 🚀',
+                                  duration: 3000,
+                                });
+
+                                // Call the sub-action completion handler (doesn't close modal)
+                                if (onSubActionComplete) {
+                                  await onSubActionComplete(subAction.id);
+                                }
+
+                                // Clear celebration after 2 seconds
+                                setTimeout(() => {
+                                  setJustCompletedId(null);
+                                  setShowMiniConfetti(false);
+                                }, 2000);
+                              }}
+                              style={styles.markStepCompleteButton}
+                            >
+                              <LinearGradient
+                                colors={[colors.vibrantTeal, colors.vibrantTeal + 'DD']}
+                                style={styles.markStepCompleteGradient}
+                              >
+                                <Text style={styles.markStepCompleteText}>✓ Mark This Step Complete</Text>
+                              </LinearGradient>
+                            </TouchableOpacity>
+                          </Animated.View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+
               {/* Refine Input */}
               {showRefineInput && (
                 <Animated.View entering={FadeIn} style={styles.refineInputContainer}>
@@ -239,46 +371,31 @@ export function FocusModeModal({
               ) : (
                 <>
                   <View style={styles.secondaryActions}>
-                    {/* Break It Down */}
-                    <TouchableOpacity
-                      onPress={handleBreakDown}
-                      style={styles.breakDownButton}
-                      disabled={isBreakingDown}
-                    >
-                      {isBreakingDown ? (
-                        <ActivityIndicator size="small" color={colors.vibrantTeal} />
-                      ) : (
-                        <>
-                          <Text style={styles.breakDownIcon}>🔻</Text>
-                          <Text style={styles.breakDownText}>Break It Down</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-
-                    {/* Refine with Gabby */}
-                    <TouchableOpacity
-                      onPress={handleRefine}
-                      style={styles.refineButton}
-                      disabled={isRefining}
-                    >
-                      {isRefining ? (
-                        <ActivityIndicator size="small" color={colors.boldTerracotta} />
-                      ) : (
-                        <>
-                          <Text style={styles.refineIcon}>✨</Text>
-                          <Text style={styles.refineText}>
-                            {showRefineInput ? 'Send to Gabby' : 'Refine'}
-                          </Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                    {/* Break It Down - only show if no sub-actions exist */}
+                    {(!action.subActions || action.subActions.length === 0) && (
+                      <TouchableOpacity
+                        onPress={handleBreakDown}
+                        style={styles.breakDownButton}
+                        disabled={isBreakingDown}
+                      >
+                        {isBreakingDown ? (
+                          <ActivityIndicator size="small" color={colors.vibrantTeal} />
+                        ) : (
+                          <>
+                            <Text style={styles.breakDownIcon}>🔻</Text>
+                            <Text style={styles.breakDownText}>Break It Down</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Complete Button */}
                   <TouchableOpacity
                     onPress={handleComplete}
-                    style={styles.completeButton}
-                    activeOpacity={0.9}
+                    style={[styles.completeButton, hasIncompleteSubActions && styles.completeButtonDisabled]}
+                    activeOpacity={hasIncompleteSubActions ? 1 : 0.9}
+                    disabled={hasIncompleteSubActions}
                   >
                     <LinearGradient
                       colors={[colors.boldTerracotta, colors.terracottaDark]}
@@ -293,6 +410,24 @@ export function FocusModeModal({
               )}
             </View>
           </Animated.View>
+
+          {/* Mini Confetti for sub-action completion */}
+          <ConfettiAnimation
+            active={showMiniConfetti}
+            onComplete={() => setShowMiniConfetti(false)}
+          />
+
+          {/* Local Snackbar for Modal */}
+          {localSnackbar && (
+            <View style={styles.localSnackbarContainer} pointerEvents="box-none">
+              <SnackbarItem
+                config={localSnackbar}
+                index={0}
+                totalCount={1}
+                onDismiss={() => setLocalSnackbar(null)}
+              />
+            </View>
+          )}
         </KeyboardAvoidingView>
       </BlurView>
     </Modal>
@@ -314,7 +449,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.parchmentWhite,
     borderTopLeftRadius: borderRadius['3xl'],
     borderTopRightRadius: borderRadius['3xl'],
-    maxHeight: '90%',
+    maxHeight: '95%',
+    minHeight: '85%',
     ...shadows.xl,
   },
   header: {
@@ -370,6 +506,14 @@ const styles = StyleSheet.create({
   contentInner: {
     padding: spacing.xl,
     paddingBottom: spacing['3xl'],
+  },
+  localSnackbarContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    alignItems: 'center',
   },
   title: {
     fontFamily: typography.fontFamily.heading,
@@ -537,6 +681,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.md,
   },
+  completeButtonDisabled: {
+    opacity: 0.5,
+  },
   completeGradient: {
     paddingVertical: spacing.lg,
     alignItems: 'center',
@@ -595,5 +742,123 @@ const styles = StyleSheet.create({
     color: colors.boldTerracotta,
     marginLeft: spacing.sm,
     textDecorationLine: 'underline',
+  },
+  // Sub-Actions Styles
+  subActionsCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.vibrantTeal + '30',
+    ...shadows.sm,
+  },
+  subActionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  subActionsIcon: {
+    fontSize: 16,
+  },
+  subActionsTitle: {
+    flex: 1,
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+  },
+  subActionsProgress: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.sm,
+    color: colors.vibrantTeal,
+  },
+  subActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+    gap: spacing.md,
+  },
+  subActionCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.gray300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subActionCheckboxCompleted: {
+    backgroundColor: colors.vibrantTeal,
+    borderColor: colors.vibrantTeal,
+  },
+  subActionCheckmark: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  subActionContent: {
+    flex: 1,
+  },
+  subActionTitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.midnightNavy,
+    lineHeight: 20,
+  },
+  subActionTitleCompleted: {
+    textDecorationLine: 'line-through',
+    color: colors.gray500,
+  },
+  subActionDuration: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray500,
+    marginTop: spacing.xs / 2,
+  },
+  // Expandable sub-action styles
+  subActionItemContainer: {
+    marginBottom: spacing.xs,
+  },
+  doThisNowButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.vibrantTeal + '15',
+    borderRadius: borderRadius.lg,
+  },
+  doThisNowText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.vibrantTeal,
+  },
+  subActionExpanded: {
+    marginTop: spacing.sm,
+    marginLeft: 36, // Align with title (checkbox width + gap)
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray200,
+  },
+  subActionExpandedText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: colors.gray700,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  markStepCompleteButton: {
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+  },
+  markStepCompleteGradient: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markStepCompleteText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
   },
 });

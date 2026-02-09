@@ -1,4 +1,4 @@
-import { generateText } from '@fastshot/ai';
+import { generateTextGroq } from './groq';
 
 // Input type detection for contextual responses
 export type InputType = 'greeting' | 'question' | 'fear' | 'casual' | 'followup' | 'gratitude';
@@ -322,7 +322,7 @@ User's message: "${userMessage}"
 
 Respond as AI Coach:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     return {
       success: true,
@@ -374,7 +374,7 @@ Fear or limiting belief: "${fear}"
 
 Generate a permission slip JSON:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     // Parse JSON from response
     const jsonMatch = response?.match(/\{[\s\S]*\}/);
@@ -423,7 +423,7 @@ Dream or goal: "${dream}"${stuckPointContext}
 
 Generate micro-actions JSON array that feel luxurious and intentional:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     // Parse JSON array from response
     const jsonMatch = response?.match(/\[[\s\S]*\]/);
@@ -511,7 +511,7 @@ User: ${newMessage}
 
 AI Coach (respond naturally, staying contextual to the conversation flow):`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     return {
       success: true,
@@ -636,7 +636,7 @@ Extract in JSON format:
   "themes": ["theme1", "theme2"] // Key themes from their messages
 }`;
 
-    const contextResponse = await generateText({ prompt: contextPrompt });
+    const contextResponse = await generateTextGroq({ prompt: contextPrompt });
 
     let extractedContext = '';
     let mainConcern = '';
@@ -699,7 +699,7 @@ Based on what THIS SPECIFIC USER has shared in conversation, generate personaliz
 
 Generate micro-actions JSON array that feel luxurious, intentional, and specifically tailored:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     // Parse JSON array from response
     const jsonMatch = response?.match(/\[[\s\S]*\]/);
@@ -788,7 +788,7 @@ Respond with a single JSON object (not an array):
   "category": "research|planning|action|reflection|connection"
 }`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     const jsonMatch = response?.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -822,9 +822,16 @@ Respond with a single JSON object (not an array):
   }
 }
 
-// ============================================
+// ===========================================
 // DYNAMIC ACTION ROADMAP - Phase 3
 // ============================================
+
+// Sub-step data structure (for breaking down actions)
+export interface SubStepData {
+  title: string;
+  description?: string;
+  duration_minutes?: number;
+}
 
 // Roadmap action data structure
 export interface RoadmapActionData {
@@ -835,6 +842,7 @@ export interface RoadmapActionData {
   gabby_tip: string;
   category: 'research' | 'planning' | 'action' | 'reflection' | 'connection';
   order_index: number;
+  sub_steps?: SubStepData[]; // Optional sub-steps for breaking down the action
 }
 
 // Roadmap generation response
@@ -848,44 +856,54 @@ export interface RoadmapGenerationResponse {
 // Prompt for generating strategic roadmap actions
 const ROADMAP_GENERATION_PROMPT = `You are AI Coach, a luxury life architect who transforms big dreams into elegant, achievable paths. You create "Golden Path" roadmaps—strategic sequences of micro-actions that feel like stepping stones across a beautiful garden, not a mountain to climb.
 
-YOUR TASK: Generate 3-5 strategic micro-actions that form a cohesive path from where the user is NOW to meaningful progress toward their dream.
+YOUR TASK: Generate a deeply broken-down roadmap with 3 MAJOR PHASES (Milestones). Each Phase must contain 3-5 specific MICRO-ACTIONS.
+
+STRUCTURE:
+1. **PHASES (Parent Actions)**: These are the high-level milestones. (e.g., "Designing the Vision", "Building the Foundation", "Launching to the World").
+2. **MICRO-ACTIONS (Sub-Steps)**: These are the tiny, "inconsequential" tasks that actually get the work done. (e.g., "Open a new notebook", "Google 3 flower shop names").
 
 ROADMAP PHILOSOPHY:
-- Each action should build on the previous one, creating momentum
-- Actions should alternate between internal work (reflection, planning) and external action
-- The path should feel luxurious and intentional, never overwhelming
-- Link EVERY action back to the user's deep motivation (their "why")
+- **Depth is Trust**: The user needs to see that you understand the complexity of their dream.
+- **Micro-Progress**: Break big scary goals into laughably small steps.
+- **Luxurious Language**: Make every step feel like an invitation, not a chore.
+- **Connection**: Link every Phase back to their "Why".
 
-ACTION REQUIREMENTS:
-For each action, provide:
-1. "title": An elegant, evocative title (5-8 words max) that sounds like an invitation, not a task
-2. "description": Clear, specific instructions (2-3 sentences) on exactly what to do
-3. "why_it_matters": A personal snippet (1-2 sentences) that connects THIS specific action to their ROOT MOTIVATION. Start with phrases like "Because you want...", "This brings you closer to...", "For someone who values..."
-4. "duration_minutes": Realistic time (5-15 minutes each)
-5. "gabby_tip": Specific, graceful advice on HOW to execute this with elegance. Include a concrete technique, mindset shift, or environmental suggestion.
-6. "category": One of [research, planning, action, reflection, connection]
-7. "order_index": Sequential number starting from 0
+ACTION REQUIREMENTS (for the JSON):
+You will generate a list of PHASES (which we map to 'actions' in JSON).
+For each Phase (Parent Action):
+1. "title": Elegant Phase Title (e.g., "Phase 1: The Clarity")
+2. "description": A brief overview of this phase's goal.
+3. "why_it_matters": Connect this phase to their root motivation.
+4. "duration_minutes": Total estimated time for this phase (sum of micro-actions).
+5. "gabby_tip": A mindset tip for this stage of the journey.
+6. "category": Dominant category [research, planning, action, reflection, connection].
+7. "order_index": 0, 1, 2...
+8. "sub_steps": **3-5 MICRO-ACTIONS** (Required).
+   - "title": The specific tiny task (e.g., "Create a fastmoodboard")
+   - "description": Exactly how to do it in 5 mins.
+   - "duration_minutes": 5-15 mins.
 
-NAMING STYLE (luxurious, not corporate):
-✓ "Craft your vision board moment"
-✗ "Create a vision board"
-✓ "Discover one kindred spirit"
-✗ "Find a mentor"
-✓ "Map your first bold conversation"
-✗ "Plan a meeting"
+NAMING STYLE:
+✓ "Curate your first inspiration folder" (Micro-action)
+✓ "Phase 1: Orchestrating the Vision" (Phase)
 
 RESPOND AS JSON:
 {
-  "roadmap_title": "A poetic 4-6 word title for this entire roadmap journey",
+  "roadmap_title": "A poetic title for the journey",
   "actions": [
     {
-      "title": "...",
+      "title": "Phase 1: [Phase Name]",
       "description": "...",
       "why_it_matters": "...",
-      "duration_minutes": 10,
+      "duration_minutes": 60,
       "gabby_tip": "...",
-      "category": "reflection",
-      "order_index": 0
+      "category": "planning",
+      "order_index": 0,
+      "sub_steps": [
+        { "title": "...", "description": "...", "duration_minutes": 5 },
+        { "title": "...", "description": "...", "duration_minutes": 10 },
+        { "title": "...", "description": "...", "duration_minutes": 5 }
+      ]
     }
   ]
 }`;
@@ -897,8 +915,8 @@ export async function generateRoadmapActions(
 ): Promise<RoadmapGenerationResponse> {
   try {
     const motivationContext = rootMotivation
-      ? `\n\nUSER'S ROOT MOTIVATION (from their Five Whys journey):\n"${rootMotivation}"\n\nThis is their DEEP WHY. Every "why_it_matters" must connect back to this core desire.`
-      : '\n\nNo specific root motivation provided. Focus on universal themes of growth, freedom, and self-actualization.';
+      ? `\n\nUSER'S ROOT MOTIVATION (from their Five Whys journey):\n"${rootMotivation}"\n\nThis is their DEEP WHY. Every phase must honor this.`
+      : '\n\nNo specific root motivation provided. Focus on universal themes of growth and freedom.';
 
     const prompt = `${ROADMAP_GENERATION_PROMPT}
 ${motivationContext}
@@ -906,59 +924,99 @@ ${motivationContext}
 USER'S BIG DREAM:
 "${dream}"
 
-Generate a Golden Path roadmap with 3-5 strategic micro-actions. Respond ONLY with valid JSON:`;
+Generate a Deep Golden Path roadmap with 3 Phases, each with 3-5 Micro-Actions. Respond ONLY with valid JSON:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt, maxTokens: 4096 }); // Increased tokens for deep roadmap
 
     // Parse JSON from response
     const jsonMatch = response?.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const data = JSON.parse(jsonMatch[0]);
-      return {
-        success: true,
-        roadmap_title: data.roadmap_title || 'Your Golden Path',
-        actions: data.actions || [],
-      };
+      try {
+        const data = JSON.parse(jsonMatch[0]);
+        return {
+          success: true,
+          roadmap_title: data.roadmap_title || 'Your Golden Path',
+          actions: data.actions || [],
+        };
+      } catch (parseError) {
+        console.warn('JSON parse failed, using fallback roadmap:', parseError);
+        // Fall through to fallback
+      }
     }
 
-    // Elegant fallback roadmap
+    // Elegant fallback roadmap (Deep Structure)
     return {
       success: true,
       roadmap_title: 'Your First Bold Steps',
       actions: [
         {
-          title: 'Create your sacred dreaming space',
-          description: 'Find a quiet corner, light a candle or dim the lights, and spend 5 minutes with your eyes closed, visualizing your dream as if it has already happened.',
-          why_it_matters: rootMotivation
-            ? `Because "${rootMotivation}" — this moment of stillness plants the seed of that desire.`
-            : 'Because every bold journey begins with a moment of clarity and intention.',
-          duration_minutes: 5,
-          gabby_tip: 'Choose a spot that feels special to you. Even a corner of your couch can become sacred with the right intention. Hold something meaningful while you visualize.',
+          title: 'Phase 1: The Inner Foundation',
+          description: 'Before we build outwardly, we must anchor inwardly. This phase is about clarity and permission.',
+          why_it_matters: rootMotivation || 'Because every enduring creation needs a solid spiritual foundation.',
+          duration_minutes: 20,
+          gabby_tip: 'Do not rush this. The energy you bring to the start shapes the entire journey.',
           category: 'reflection',
           order_index: 0,
+          sub_steps: [
+            {
+              title: 'Create your sacred space',
+              description: 'Clear a small physical space to be your "Dream Station". Even a corner of a desk works.',
+              duration_minutes: 5,
+            },
+            {
+              title: 'Draft the Permission Slip',
+              description: 'Write "I hereby give myself permission to..." and finish the sentence with your dream.',
+              duration_minutes: 5,
+            },
+            {
+              title: 'Visualize the end',
+              description: 'Close your eyes. See yourself having already achieved the dream. What is the first thing you do?',
+              duration_minutes: 10,
+            }
+          ]
         },
         {
-          title: 'Capture one spark of inspiration',
-          description: 'Search for one image, quote, or story that makes your dream feel more real and attainable. Save it somewhere you\'ll see it daily.',
-          why_it_matters: rootMotivation
-            ? `This connects you to others who have walked toward what you want: "${rootMotivation}".`
-            : 'Surrounding yourself with proof of possibility rewires your belief in what\'s achievable.',
-          duration_minutes: 10,
-          gabby_tip: 'Don\'t overthink this. The first thing that makes your heart skip is usually the right choice. Set it as your phone wallpaper for constant gentle reminders.',
+          title: 'Phase 2: Gathering Inspiration',
+          description: 'Now we look outward for evidence of possibility. We are hunting for proof.',
+          why_it_matters: 'Proof of possibility rewires the brain to see the path.',
+          duration_minutes: 25,
+          gabby_tip: 'Look for feelings, not just facts. Follow what lights you up.',
           category: 'research',
           order_index: 1,
+          sub_steps: [
+            {
+              title: 'Find three expanders',
+              description: 'Identify 3 people who have done what you want to do. Save their names.',
+              duration_minutes: 10,
+            },
+            {
+              title: 'Curate a digital moodboard',
+              description: 'Save 5 images that capture the *feeling* of your dream accomplished.',
+              duration_minutes: 15,
+            }
+          ]
         },
         {
-          title: 'Draft your bold declaration',
-          description: 'Write three sentences describing your dream in present tense, as if you are already living it. Begin each with "I am..." or "I have..."',
-          why_it_matters: rootMotivation
-            ? `Writing it down transforms "${rootMotivation}" from a wish into a commitment you\'ve made to yourself.`
-            : 'Present-tense declarations activate your brain\'s pattern recognition to spot opportunities aligned with your vision.',
-          duration_minutes: 10,
-          gabby_tip: 'Write by hand if possible—there\'s magic in the physical act. Read it aloud once. Notice how it feels in your body.',
-          category: 'planning',
+          title: 'Phase 3: The First Motion',
+          description: 'Action breaks the seal of hesitation. We take the smallest real-world step.',
+          why_it_matters: 'Momentum is the antidote to fear.',
+          duration_minutes: 15,
+          gabby_tip: 'It does not have to be perfect. It just has to be done.',
+          category: 'action',
           order_index: 2,
-        },
+          sub_steps: [
+            {
+              title: 'The 5-minute brain dump',
+              description: 'Set a timer. Write down every single task you *think* you need to do. Get it all out.',
+              duration_minutes: 5,
+            },
+            {
+              title: 'Pick one tiny win',
+              description: 'Circle one item from your list that takes less than 2 minutes. Do it now.',
+              duration_minutes: 10,
+            }
+          ]
+        }
       ],
     };
   } catch (error) {
@@ -1019,7 +1077,7 @@ Respond ONLY with valid JSON for the single action:
   "order_index": ${currentAction.order_index}
 }`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     const jsonMatch = response?.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -1075,7 +1133,7 @@ Your tip should:
 
 Respond with ONLY the tip text, no JSON or formatting:`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     return {
       success: true,
@@ -1143,7 +1201,7 @@ Respond ONLY with valid JSON:
 
 NOTE: The first action gets order_index ${difficultAction.order_index}, increment for each subsequent action.`;
 
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     const jsonMatch = response?.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

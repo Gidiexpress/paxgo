@@ -72,7 +72,7 @@ interface SnackbarItemProps {
   onDismiss: (id: string) => void;
 }
 
-function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProps) {
+export function SnackbarItem({ config, index, totalCount, onDismiss }: SnackbarItemProps) {
   const insets = useSafeAreaInsets();
   const colorScheme = SNACKBAR_COLORS[config.type];
 

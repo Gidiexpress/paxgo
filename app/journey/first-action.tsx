@@ -23,7 +23,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTextGeneration } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import { ConfettiAnimation } from '@/components/ConfettiAnimation';
 import { FirstWinCelebration } from '@/components/FirstWinCelebration';
 import { useFirstWinPaywall } from '@/hooks/useFirstWinPaywall';
@@ -49,7 +49,7 @@ const FIRST_ACTION_KEY = '@boldmove_first_action';
 export default function FirstActionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { generateText, isLoading } = useTextGeneration();
+  const { generateText, isLoading } = useGroq();
   const {
     onActionCompleted,
     showCelebration,
@@ -342,12 +342,12 @@ Examples of good micro-actions:
           ) : !isCompleted ? (
             <Animated.View entering={SlideInRight}>
               <View style={styles.inProgressContainer}>
-              <Text style={styles.inProgressText}>
-                Take a moment to complete this action...
-              </Text>
-              <Text style={styles.inProgressHint}>
-                When you&apos;re done, tap the button below
-              </Text>
+                <Text style={styles.inProgressText}>
+                  Take a moment to complete this action...
+                </Text>
+                <Text style={styles.inProgressHint}>
+                  When you&apos;re done, tap the button below
+                </Text>
               </View>
 
               <TouchableOpacity

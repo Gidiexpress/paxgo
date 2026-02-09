@@ -32,7 +32,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useTextGeneration } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
 import { Button } from './ui/Button';
 import { MicroAction, TinyStep } from '@/types';
@@ -242,8 +242,11 @@ export function DeepDiveModal({ visible, action, onClose, onComplete }: DeepDive
   const [isGenerating, setIsGenerating] = useState(false);
   const [localSteps, setLocalSteps] = useState<TinyStep[]>([]);
 
-  const { generateText, isLoading: aiLoading } = useTextGeneration({
-    onSuccess: async (response) => {
+  const { generateText, isLoading: aiLoading } = useGroq();
+
+  const handleGenerateSteps = async (prompt: string) => {
+    try {
+      const response = await generateText(prompt);
       if (response) {
         const steps = parseTinySteps(response);
         setLocalSteps(steps);
@@ -251,9 +254,10 @@ export function DeepDiveModal({ visible, action, onClose, onComplete }: DeepDive
           await setTinySteps(steps);
         }
         setIsGenerating(false);
+      } else {
+        throw new Error('No response');
       }
-    },
-    onError: (err) => {
+    } catch (err) {
       console.error('Error generating tiny steps:', err);
       setIsGenerating(false);
       // Generate fallback steps
@@ -262,8 +266,8 @@ export function DeepDiveModal({ visible, action, onClose, onComplete }: DeepDive
       if (deepDive) {
         setTinySteps(fallbackSteps);
       }
-    },
-  });
+    }
+  };
 
   // Initialize or restore deep dive when modal opens
   useEffect(() => {
@@ -304,7 +308,7 @@ Format your response exactly like this (include the numbers):
 
 Make the first step extremely easy and quick to build momentum. Each subsequent step should naturally lead to the next. The final step should complete the task.`;
 
-    generateText(prompt);
+    handleGenerateSteps(prompt);
   };
 
   const parseTinySteps = (response: string): TinyStep[] => {
@@ -529,7 +533,7 @@ Make the first step extremely easy and quick to build momentum. Each subsequent 
                     key={step.id}
                     step={step}
                     isActive={false}
-                    onComplete={() => {}}
+                    onComplete={() => { }}
                     index={index}
                   />
                 ))}

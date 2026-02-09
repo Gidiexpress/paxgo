@@ -15,7 +15,7 @@ import { colors, typography, borderRadius, spacing, shadows } from '@/constants/
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { PermissionSlipCompact } from '@/components/PermissionSlip';
+import { PermissionSlipCompact } from '@/components/DigitalPermissionSlip';
 import { usePermissionSlips, useActions, useProofs } from '@/hooks/useStorage';
 import { useSubscription } from '@/hooks/useSubscription';
 import { PermissionSlip, MicroAction, ProofEntry } from '@/types';
@@ -106,15 +106,15 @@ function ArchiveItemCard({
                   item.type === 'permission_slip'
                     ? 'gold'
                     : item.type === 'action'
-                    ? 'default'
-                    : 'premium'
+                      ? 'default'
+                      : 'premium'
                 }
                 label={
                   item.type === 'permission_slip'
                     ? 'Slip'
                     : item.type === 'action'
-                    ? 'Action'
-                    : 'Proof'
+                      ? 'Action'
+                      : 'Proof'
                 }
               />
             </View>

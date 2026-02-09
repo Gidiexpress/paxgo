@@ -26,7 +26,9 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTextGeneration } from '@fastshot/ai';
+import { useAuth } from '@fastshot/auth';
+import { useGroq } from '@/hooks/useGroq';
+import { supabase } from '@/lib/supabase';
 import {
   colors,
   typography,
@@ -48,6 +50,7 @@ const CORE_MOTIVATION_KEY = '@boldmove_core_motivation';
 export default function FirstDialogueScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,7 +61,7 @@ export default function FirstDialogueScreen() {
   const [isComplete, setIsComplete] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const { generateText, isLoading } = useTextGeneration();
+  const { generateText, isLoading } = useGroq();
 
   // Typing indicator animation
   const dotScale1 = useSharedValue(1);
@@ -112,13 +115,40 @@ export default function FirstDialogueScreen() {
   useEffect(() => {
     const initializeDialogue = async () => {
       try {
-        const [storedStuckPoint, storedDream] = await Promise.all([
-          AsyncStorage.getItem('@boldmove_stuck_point'),
-          AsyncStorage.getItem('@boldmove_dream'),
-        ]);
+        let stuckPointData = null;
+        let dreamData = '';
+        let userName = '';
 
-        const stuckPointData = storedStuckPoint ? JSON.parse(storedStuckPoint) : null;
-        const dreamData = storedDream || '';
+        // 1. Try to fetch from Supabase if user is logged in
+        if (user?.id) {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('dream, stuck_point, name')
+            .eq('id', user.id)
+            .single();
+
+          if (userData) {
+            dreamData = userData.dream || '';
+            // Handle stuck_point being a JSON string or plain text
+            try {
+              stuckPointData = userData.stuck_point ? JSON.parse(userData.stuck_point) : null;
+            } catch {
+              stuckPointData = { title: userData.stuck_point || 'your goals' };
+            }
+            userName = userData.name || '';
+          }
+        }
+
+        // 2. Fallback to AsyncStorage if no data from DB (or not logged in)
+        if (!dreamData) {
+          const [storedStuckPoint, storedDream] = await Promise.all([
+            AsyncStorage.getItem('@boldmove_stuck_point'),
+            AsyncStorage.getItem('@boldmove_dream'),
+          ]);
+
+          stuckPointData = storedStuckPoint ? JSON.parse(storedStuckPoint) : null;
+          dreamData = storedDream || '';
+        }
 
         setStuckPoint(stuckPointData?.title || 'your goals');
         setDream(dreamData);
@@ -126,10 +156,10 @@ export default function FirstDialogueScreen() {
         // Generate initial greeting
         const initialPrompt = `You are Gabby, a warm and insightful life coach helping someone explore their deepest motivations using the "Five Whys" technique.
 
-The user wants to achieve: "${dreamData || 'their dream'}"
+The user${userName ? ` is named ${userName} and` : ''} wants to achieve: "${dreamData || 'their dream'}"
 Their focus area is: "${stuckPointData?.title || 'personal growth'}"
 
-Start with a warm, encouraging greeting (2-3 sentences max). Acknowledge their dream and then ask them the FIRST "Why" question: Why is this dream important to them?
+Start with a warm, encouraging greeting${userName ? ` using their name (${userName})` : ''} (2-3 sentences max). Acknowledge their dream and then ask them the FIRST "Why" question: Why is this dream important to them?
 
 Be conversational, warm, and use their dream specifically. Don't be generic. End with just the question, don't number it.`;
 
@@ -165,7 +195,7 @@ Be conversational, warm, and use their dream specifically. Don't be generic. End
     };
 
     initializeDialogue();
-  }, []);
+  }, [user]);
 
   const scrollToBottom = () => {
     setTimeout(() => {

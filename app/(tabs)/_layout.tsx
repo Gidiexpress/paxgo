@@ -3,19 +3,20 @@ import { Tabs } from 'expo-router';
 import { View, Text, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography } from '@/constants/theme';
+import { Target, Trophy, User } from 'lucide-react-native';
 
 interface TabIconProps {
-  icon: string;
+  icon: React.ElementType;
   label: string;
   focused: boolean;
   color: string;
 }
 
-function TabIcon({ icon, label, focused, color }: TabIconProps) {
+function TabIcon({ icon: Icon, label, focused, color }: TabIconProps) {
   return (
     <View style={styles.tabIconContainer}>
       <View style={[styles.iconWrapper, focused && styles.iconWrapperFocused]}>
-        <Text style={[styles.tabIcon, { opacity: focused ? 1 : 0.6 }]}>{icon}</Text>
+        <Icon size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
       </View>
       <Text
         style={[
@@ -63,46 +64,43 @@ export default function TabLayout() {
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon icon="🏠" label="Home" focused={focused} color={color} />
-          ),
-          tabBarLabel: () => null,
-        }}
-      />
+      {/* Today tab - THE main action (one thing at a time) */}
       <Tabs.Screen
         name="action"
         options={{
-          title: 'Action',
+          title: 'Today',
           tabBarIcon: ({ focused, color }) => (
-            <TabIcon icon="⚡" label="Action" focused={focused} color={color} />
+            <TabIcon icon={Target} label="Today" focused={focused} color={color} />
           ),
           tabBarLabel: () => null,
         }}
       />
+      {/* Wins tab - Completed actions and celebrations */}
       <Tabs.Screen
         name="wins"
         options={{
           title: 'Wins',
           tabBarIcon: ({ focused, color }) => (
-            <TabIcon icon="🏆" label="Wins" focused={focused} color={color} />
+            <TabIcon icon={Trophy} label="Wins" focused={focused} color={color} />
           ),
           tabBarLabel: () => null,
         }}
       />
+      {/* You tab - Profile, Dreams, Settings, Chat access */}
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: 'You',
           tabBarIcon: ({ focused, color }) => (
-            <TabIcon icon="👤" label="Profile" focused={focused} color={color} />
+            <TabIcon icon={User} label="You" focused={focused} color={color} />
           ),
           tabBarLabel: () => null,
         }}
       />
+      {/* Hidden tabs - keep files but hide from tab bar */}
+      <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="chat" options={{ href: null }} />
+      <Tabs.Screen name="dreams" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -124,9 +122,6 @@ const styles = StyleSheet.create({
   },
   iconWrapperFocused: {
     backgroundColor: `${colors.boldTerracotta}10`,
-  },
-  tabIcon: {
-    fontSize: 18,
   },
   tabLabel: {
     fontSize: 11,

@@ -8,7 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Audio } from 'expo-av';
-import { useAudioTranscription } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,21 +38,27 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
   const isRecordingRef = useRef(false); // Track recording state without re-renders
   const isOperationInProgress = useRef(false); // Mutex to prevent concurrent operations
 
-  const { transcribeAudio, isLoading: isTranscribing, error, reset: resetTranscription } = useAudioTranscription({
-    onSuccess: (text) => {
+  const { transcribeAudio, isLoading, error } = useGroq();
+  const isTranscribing = isLoading;
+
+  // Helper to handle transcription
+  const handleTranscription = async (uri: string) => {
+    try {
+      const text = await transcribeAudio(uri);
+
       if (text && text.trim()) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onTranscriptionComplete(text.trim());
+      } else {
+        // Only show error haptic for actual transcription failures, not initialization
+        if (isRecordingRef.current === false) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        }
       }
-    },
-    onError: (err) => {
+    } catch (err) {
       console.error('Transcription error:', err);
-      // Only show error haptic for actual transcription failures, not initialization
-      if (isRecordingRef.current === false) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
-    },
-  });
+    }
+  };
 
   // Animation values
   const pulseScale = useSharedValue(1);
@@ -369,8 +375,8 @@ export function VoiceRecorder({ onTranscriptionComplete, disabled }: VoiceRecord
       // Only transcribe if we have a valid recording of sufficient length
       if (uri && currentDuration >= 1) {
         // Reset any previous transcription errors before new attempt
-        resetTranscription?.();
-        await transcribeAudio({ audioUri: uri, language: 'en' });
+        // resetTranscription?.(); // Not needed for simple hook
+        await handleTranscription(uri);
       } else if (currentDuration < 1 && currentDuration > 0) {
         // Recording was too short - subtle feedback
         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

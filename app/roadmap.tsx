@@ -97,7 +97,24 @@ export default function RoadmapScreen() {
     const success = await completeAction(actionId);
 
     if (success) {
-      // Determine celebration message
+      // Check if this is a sub-action or a main action
+      const isSubAction = selectedAction?.subActions?.some(sub => sub.id === actionId);
+
+      if (isSubAction && selectedAction) {
+        // Update the selectedAction state to reflect the sub-action completion
+        setSelectedAction({
+          ...selectedAction,
+          subActions: selectedAction.subActions?.map(sub =>
+            sub.id === actionId
+              ? { ...sub, is_completed: true, completed_at: new Date().toISOString() }
+              : sub
+          ),
+        });
+        // Don't close the modal or show celebration for sub-actions
+        return;
+      }
+
+      // For main actions, show celebration
       const newCompletedCount = completedCount + 1;
       const action = activeRoadmap?.actions.find((a) => a.id === actionId);
 
@@ -182,16 +199,20 @@ export default function RoadmapScreen() {
 
   const handleGenerateNew = async () => {
     const dream = user?.dream || params.dream;
+    const motivation = params.rootMotivation || user?.dream || '';
+
     if (dream) {
       // Navigate to generation screen - it will handle the loading animation and generation
       router.push({
         pathname: '/generate-roadmap',
         params: {
           dream,
-          rootMotivation: params.rootMotivation || user?.dream || '',
+          rootMotivation: motivation,
         },
       });
     } else {
+      // Only redirect to new-dream if we truly have no dream data
+      console.warn('No dream found - redirecting to new-dream');
       router.push('/new-dream');
     }
   };
@@ -252,10 +273,10 @@ export default function RoadmapScreen() {
         colors={[colors.midnightNavy, colors.navyLight]}
         style={[styles.header, { paddingTop: insets.top + spacing.lg }]}
       >
-        {/* Back button */}
+        {/* Back button - returns to Home tab */}
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace('/(tabs)/action')}
         >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
@@ -263,7 +284,7 @@ export default function RoadmapScreen() {
         <Animated.View entering={FadeIn}>
           <Text style={styles.headerSubtitle}>Your Golden Path</Text>
           <Text style={styles.headerTitle} numberOfLines={2}>
-            {activeRoadmap.roadmap_title}
+            {activeRoadmap.title}
           </Text>
         </Animated.View>
 
@@ -323,9 +344,6 @@ export default function RoadmapScreen() {
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeader}>
             <Text style={styles.sectionTitle}>Your Micro-Actions</Text>
-            <TouchableOpacity onPress={handleGenerateNew}>
-              <Text style={styles.regenerateText}>✨ New Path</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.timelineContainer}>

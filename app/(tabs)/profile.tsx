@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { Badge } from '@/components/ui/Badge';
 import { DreamSwitcher } from '@/components/DreamSwitcher';
 import { NotificationPrePrompt } from '@/components/NotificationPrePrompt';
 import { useUser, useOnboarding, useDreamProgress } from '@/hooks/useStorage';
+import { useAuth } from '@fastshot/auth';
+import { supabase } from '@/lib/supabase';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useDreams } from '@/hooks/useDreams';
 import { useBoostStore } from '@/hooks/useBoostStore';
@@ -29,9 +31,34 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const { user } = useUser();
+  const { user, updateUser } = useUser();
   const { resetOnboarding } = useOnboarding();
+  const { signOut, user: authUser } = useAuth();
   const { progress } = useDreamProgress();
+
+  // Sync profile data from Supabase
+  useEffect(() => {
+    const syncProfile = async () => {
+      if (authUser?.id) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', authUser.id)
+          .single();
+
+        if (data && !error && data.name) {
+          // accessing user from useUser could be stale inside useEffect if not in deps, but here we just want to update
+          // actually, checking against user.name prevents loops if user is in deps.
+          // Let's just update if it's different or if local is missing
+          if (user?.name !== data.name) {
+            await updateUser({ name: data.name });
+          }
+        }
+      }
+    };
+
+    syncProfile();
+  }, [authUser?.id]); // Run when auth user is available
   const { subscription, isPremium } = useSubscription();
   const { dreams, activeDreamId, switchDream } = useDreams();
   const { unreadCount } = useBoostStore();
@@ -60,7 +87,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             await resetOnboarding();
-            router.replace('/onboarding');
+            router.replace('/journey/stuck-point');
           },
         },
       ]
@@ -107,6 +134,13 @@ export default function ProfileScreen() {
 
   const menuItems = [
     {
+      icon: '💬',
+      title: 'Start Coaching Session',
+      subtitle: 'Get AI coaching & reflection',
+      onPress: () => router.push('/new-dream'),
+      isGabby: true,
+    },
+    {
       icon: '✨',
       title: 'Boldness Boosts',
       subtitle: 'Premium guides & roadmaps',
@@ -144,7 +178,7 @@ export default function ProfileScreen() {
       icon: '🏅',
       title: 'All Achievements',
       subtitle: `${progress?.completedActions || 0} actions completed`,
-      onPress: () => {},
+      onPress: () => router.push('/(tabs)/wins'),
     },
   ];
 
@@ -157,26 +191,27 @@ export default function ProfileScreen() {
         : 'Tap to enable',
       onPress: handleNotificationPress,
     },
-    {
+    /* {
       icon: '🗄️',
       title: 'Database Status',
       subtitle: 'Check connection & tables',
       onPress: () => router.push('/database-status'),
-    },
+    }, */
+    /* REMOVED: User request to disable/hide database check */
     {
       icon: '🎨',
       title: 'Appearance',
-      onPress: () => {},
+      onPress: () => router.push('/settings/appearance'),
     },
     {
       icon: '🔒',
       title: 'Privacy',
-      onPress: () => {},
+      onPress: () => router.push('/settings/privacy'),
     },
     {
       icon: '❓',
       title: 'Help & Support',
-      onPress: () => {},
+      onPress: () => router.push('/settings/help'),
     },
   ];
 
@@ -201,7 +236,7 @@ export default function ProfileScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {user?.name?.[0]?.toUpperCase() || '✨'}
+                  {user?.name?.[0]?.toUpperCase() || authUser?.email?.[0]?.toUpperCase() || '✨'}
                 </Text>
               </View>
               {isPremium && (
@@ -210,7 +245,7 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
-            <Text style={styles.userName}>{user?.name || 'Bold Explorer'}</Text>
+            <Text style={styles.userName}>{user?.name || authUser?.email || 'Bold Explorer'}</Text>
             <Badge
               label={isPremium ? 'Bold Adventurer' : 'The Seeker'}
               variant={isPremium ? 'gold' : 'default'}
@@ -358,8 +393,8 @@ export default function ProfileScreen() {
               {subscription.tier === 'seeker'
                 ? 'The Seeker (Free)'
                 : subscription.tier === 'bold-adventurer'
-                ? 'The Bold Adventurer'
-                : 'The 7-Day Sprint'}
+                  ? 'The Bold Adventurer'
+                  : 'The 7-Day Sprint'}
             </Text>
             {subscription.expiresAt && (
               <Text style={styles.subscriptionExpiry}>
@@ -384,6 +419,22 @@ export default function ProfileScreen() {
 
         {/* Reset & Logout */}
         <Animated.View entering={FadeInDown.delay(500)} style={styles.dangerZone}>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              try {
+                await signOut();
+                router.replace('/journey/create-account');
+              } catch (error) {
+                console.error('Logout failed:', error);
+                Alert.alert('Error', 'Failed to log out');
+              }
+            }}
+          >
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.resetButton}
             onPress={handleResetOnboarding}
@@ -704,5 +755,20 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.sm,
     color: colors.boldTerracotta,
     marginTop: spacing.xs,
+  },
+  logoutButton: {
+    padding: spacing.lg,
+    alignItems: 'center',
+    borderRadius: borderRadius.xl,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  logoutButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.boldTerracotta,
   },
 });

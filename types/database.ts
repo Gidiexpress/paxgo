@@ -52,7 +52,7 @@ export type Database = {
           created_at: string | null
           dream: string
           id: string
-          roadmap_title: string
+          title: string
           root_motivation: string | null
           status: string
           updated_at: string | null
@@ -62,7 +62,7 @@ export type Database = {
           created_at?: string | null
           dream: string
           id?: string
-          roadmap_title: string
+          title: string
           root_motivation?: string | null
           status?: string
           updated_at?: string | null
@@ -72,7 +72,7 @@ export type Database = {
           created_at?: string | null
           dream?: string
           id?: string
-          roadmap_title?: string
+          title?: string
           root_motivation?: string | null
           status?: string
           updated_at?: string | null
@@ -758,7 +758,7 @@ export type FiveWhysResponse = {
 };
 
 // Permission Slip types
-export type PermissionSlipVisualStyle = 'minimalist' | 'floral' | 'modern';
+export type PermissionSlipVisualStyle = 'minimalist' | 'floral' | 'modern' | 'classic' | 'royal' | 'cosmic' | 'sisterhood' | 'future-self';
 
 export type PermissionSlip = {
   id: string;
@@ -792,7 +792,7 @@ export type ActionRoadmap = {
   user_id: string;
   dream: string;
   root_motivation: string | null;
-  roadmap_title: string;
+  title: string; // Changed from roadmap_title to match DB
   status: RoadmapStatus | string;
   created_at: string | null;
   updated_at: string | null;
@@ -802,6 +802,8 @@ export type ActionRoadmap = {
 export type RoadmapAction = {
   id: string;
   roadmap_id: string;
+  user_id: string;
+  parent_action_id: string | null;
   title: string;
   description: string | null;
   why_it_matters: string | null;
@@ -812,6 +814,7 @@ export type RoadmapAction = {
   gabby_tip: string | null;
   category: RoadmapActionCategory | string | null;
   created_at: string | null;
+  subActions?: RoadmapAction[]; // Sub-actions if this action was broken down
 };
 
 // Roadmap with its actions (for display)
@@ -823,6 +826,8 @@ export type ActionRoadmapWithActions = ActionRoadmap & {
 export type ActionRoadmapInsert = Omit<ActionRoadmap, 'id' | 'created_at' | 'updated_at'>;
 export type RoadmapActionInsert = {
   roadmap_id: string;
+  user_id: string;
+  parent_action_id?: string | null;
   title: string;
   description?: string | null;
   why_it_matters?: string | null;

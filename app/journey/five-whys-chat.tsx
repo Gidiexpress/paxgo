@@ -30,7 +30,7 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@fastshot/auth';
-import { useTextGeneration, useAudioTranscription } from '@fastshot/ai';
+import { useGroq } from '@/hooks/useGroq';
 import { supabase } from '@/lib/supabase';
 import { Audio } from 'expo-av';
 import { useSnackbar } from '@/contexts/SnackbarContext';
@@ -79,8 +79,10 @@ export default function FiveWhysChatScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const { user } = useAuth();
   const { showSuccess, showError } = useSnackbar();
-  const { generateText, isLoading: isAILoading } = useTextGeneration();
-  const { transcribeAudio, isLoading: isTranscribing } = useAudioTranscription();
+  const { generateText, transcribeAudio, isLoading } = useGroq();
+  // Map consolidated isLoading to separate flags for compatibility or use single flag
+  const isAILoading = isLoading;
+  const isTranscribing = isLoading;
 
   // State
   const [messages, setMessages] = useState<Message[]>([]);
@@ -178,7 +180,18 @@ export default function FiveWhysChatScreen() {
         throw new Error('User not authenticated');
       }
 
-      // Load onboarding data from AsyncStorage
+      // 1. Try to fetch from Supabase first
+      let dbUserData: any = null;
+      if (user?.id) {
+        const { data } = await supabase
+          .from('users')
+          .select('dream, stuck_point, name')
+          .eq('id', user.id)
+          .single();
+        dbUserData = data;
+      }
+
+      // 2. Load onboarding data from AsyncStorage
       const [stuckPointStr, dreamStr, userDataStr, storedSessionId] = await Promise.all([
         AsyncStorage.getItem('@boldmove_stuck_point'),
         AsyncStorage.getItem('@boldmove_dream'),
@@ -186,31 +199,28 @@ export default function FiveWhysChatScreen() {
         AsyncStorage.getItem('@boldmove_current_session'),
       ]);
 
-      // Parse stuck point - handle both plain string and JSON object
+      // Parse stuck point - prioritize AsyncStorage (freshest selection) over database
       let stuckPoint = null;
       if (stuckPointStr) {
         try {
           stuckPoint = JSON.parse(stuckPointStr);
         } catch {
-          // If parsing fails, it's a plain string (category ID)
           stuckPoint = { id: stuckPointStr };
         }
-      }
-
-      const dream = dreamStr || '';
-
-      // Parse user data - handle both plain string and JSON object
-      let userData = null;
-      if (userDataStr) {
+      } else if (dbUserData?.stuck_point) {
         try {
-          userData = JSON.parse(userDataStr);
+          stuckPoint = JSON.parse(dbUserData.stuck_point);
         } catch {
-          // If parsing fails, treat it as a name
-          userData = { name: userDataStr };
+          stuckPoint = { id: dbUserData.stuck_point };
         }
       }
 
-      // Map category ID to a readable title if title is not available
+      // Prioritize AsyncStorage dream (freshest selection) over database value
+      // User may have started a new onboarding journey with a different dream
+      const dream = dreamStr || dbUserData?.dream || '';
+      const name = dbUserData?.name || (userDataStr ? JSON.parse(userDataStr).name : null) || user?.email?.split('@')[0] || 'Bold Explorer';
+
+      // Map category ID to a readable title
       const categoryTitleMap: Record<string, string> = {
         'career': 'career growth',
         'travel': 'travel & adventure',
@@ -223,7 +233,7 @@ export default function FiveWhysChatScreen() {
       const categoryTitle = stuckPoint?.title || categoryTitleMap[categoryId] || 'personal growth';
 
       const onboarding: OnboardingData = {
-        name: userData?.name || user?.email?.split('@')[0] || 'Bold Explorer',
+        name,
         stuckPoint: categoryId,
         stuckPointTitle: categoryTitle,
         dream: dream || 'achieving your dream',
@@ -289,30 +299,58 @@ export default function FiveWhysChatScreen() {
       const maxRetries = 5;
 
       while (!userProfileExists && retryCount < maxRetries) {
+        // Ensure Supabase client has the session
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session?.user) {
+          console.warn('⚠️ No active Supabase session found in transferOnboardingData');
+          const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+          if (!refreshedSession?.user) {
+            throw new Error('No authenticated session available');
+          }
+        }
+
+        // Check for existing profile (using maybeSingle to avoid 406 errors)
         const { data: existingUser } = await supabase
           .from('users')
           .select('id')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         if (existingUser) {
           userProfileExists = true;
         } else {
-          // Profile doesn't exist yet, create it manually
+          // Is user ID matching?
+          if (session?.user.id !== user.id) {
+            console.warn('⚠️ User ID mismatch:', { authUser: user.id, sessionUser: session?.user.id });
+            // We must use the session ID for RLS to work
+          }
+
+          const targetUserId = session?.user.id || user.id;
+
+          // Use upsert to handle potential race conditions or existing-but-invisible rows
           const { error: insertError } = await supabase
             .from('users')
-            .insert({
-              id: user.id,
+            .upsert({
+              id: targetUserId,
               name: onboarding.name,
               onboarding_completed: false,
-            });
+            }, { onConflict: 'id' });
 
           if (!insertError) {
             userProfileExists = true;
           } else {
-            retryCount++;
-            if (retryCount < maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000));
+            console.error('Insert/Upsert error attempt', retryCount, insertError);
+            // Check specifically for RLS policy violation code 42501
+            if (insertError.code === '42501') {
+              console.error('⛔ RLS Violation. Creating profile failed. Check Policies.');
+              // Break loop to avoid spamming
+              retryCount = maxRetries;
+            } else {
+              retryCount++;
+              if (retryCount < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+              }
             }
           }
         }
@@ -661,7 +699,7 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
 
       if (uri) {
         // Transcribe the audio
-        const transcription = await transcribeAudio({ audioUri: uri, language: 'en' });
+        const transcription = await transcribeAudio(uri);
 
         if (transcription) {
           setInputText(transcription);
@@ -852,11 +890,8 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
       {renderProgressIndicator()}
 
       {/* Chat area */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.chatContainer}
-        keyboardVerticalOffset={insets.top + 120}
-      >
+      {/* Chat area */}
+      <View style={styles.chatContainer}>
         <ScrollView
           ref={scrollViewRef}
           style={styles.messagesContainer}
@@ -889,18 +924,7 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
             </TouchableOpacity>
           </Animated.View>
         ) : (
-          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-            <TextInput
-              style={styles.input}
-              placeholder="Share your thoughts..."
-              placeholderTextColor={colors.gray400}
-              value={inputText}
-              onChangeText={setInputText}
-              multiline
-              maxLength={500}
-              editable={!isSending && !isAILoading && !isRecording}
-            />
-
+          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, spacing.xl) + spacing.md }]}>
             {/* Microphone button */}
             <TouchableOpacity
               style={[
@@ -921,6 +945,17 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
                 <Text style={styles.micIcon}>{isRecording ? '⏹' : '🎤'}</Text>
               </LinearGradient>
             </TouchableOpacity>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Share your thoughts..."
+              placeholderTextColor={colors.gray400}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={500}
+              editable={!isSending && !isAILoading && !isRecording}
+            />
 
             <TouchableOpacity
               style={[
@@ -943,7 +978,7 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
             </TouchableOpacity>
           </View>
         )}
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -1141,9 +1176,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: spacing.md,
     paddingTop: spacing.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray200,
-    backgroundColor: colors.parchmentWhite,
+    // borderTopWidth: 1, // Removed to blend with chat
+    // borderTopColor: colors.gray200, // Removed to blend with chat
+    // backgroundColor: colors.parchmentWhite, // Removed to let gradient show through
     gap: spacing.sm,
   },
   input: {
@@ -1159,16 +1194,16 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   micButton: {
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
     marginRight: spacing.sm,
+    ...shadows.sm, // Apply shadow to container
   },
   micButtonActive: {
     transform: [{ scale: 1.1 }],
   },
   micGradient: {
-    width: 44,
-    height: 44,
+    width: 48, // Increase to matching size
+    height: 48,
+    borderRadius: 24, // Apply radius here
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1176,15 +1211,16 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   sendButton: {
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
+    ...shadows.sm, // Apply shadow to container
   },
   sendButtonDisabled: {
     opacity: 0.7,
+    shadowOpacity: 0,
   },
   sendGradient: {
-    width: 44,
-    height: 44,
+    width: 48, // Increase to matching size
+    height: 48,
+    borderRadius: 24, // Apply radius here
     alignItems: 'center',
     justifyContent: 'center',
   },

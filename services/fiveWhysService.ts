@@ -1,4 +1,4 @@
-import { generateText } from '@fastshot/ai';
+import { generateTextGroq } from './groq';
 import { supabase } from '@/lib/supabase';
 import { FiveWhysSession, FiveWhysResponse } from '@/types/database';
 
@@ -75,11 +75,10 @@ Their dream: "${dream}"
 Conversation depth: ${currentWhyNumber} of 5 (INTERNAL ONLY - never mention this number)
 ${depthGuidance[currentWhyNumber]}
 
-${
-  conversationContext
-    ? `CONVERSATION SO FAR:\n${conversationContext}\n\nBased on their last response, reflect warmly on what they shared, then ask your next question to go deeper.`
-    : `This is your FIRST question. Briefly acknowledge their dream with warmth, then ask why this dream matters to them.`
-}
+${conversationContext
+      ? `CONVERSATION SO FAR:\n${conversationContext}\n\nBased on their last response, reflect warmly on what they shared, then ask your next question to go deeper.`
+      : `This is your FIRST question. Briefly acknowledge their dream with warmth, then ask why this dream matters to them.`
+    }
 
 Respond with:
 1. ${isFirstQuestion ? 'A warm acknowledgment (1-2 sentences) of their dream' : 'A brief, warm reflection on their answer (1-2 sentences)'}
@@ -90,7 +89,7 @@ CRITICAL: Do NOT mention "Five Whys", "layers", "steps", or any framework. Do NO
 Keep the total response under 80 words. Be warm, genuine, and concise.`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
 
     if (!response) {
       throw new Error('Empty response from AI');
@@ -164,7 +163,7 @@ Make it feel personal and meaningful, not generic.
 CRITICAL: Do NOT mention "Five Whys" or reference the process.`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
     return response?.trim() || "Your dream connects to something deep within you—a desire for growth, meaning, and becoming who you're meant to be.";
   } catch (error) {
     console.error('Root motivation generation error:', error);
@@ -208,7 +207,7 @@ CRITICAL: Do NOT mention "Five Whys", "journey", or the coaching process.
 Keep it elegant and meaningful—this will be displayed as a beautiful keepsake.`;
 
   try {
-    const response = await generateText({ prompt });
+    const response = await generateTextGroq({ prompt });
     return response?.trim() || `You have permission to pursue ${dream} with your whole heart. Your desire for this comes from a beautiful place within you—honor it.`;
   } catch (error) {
     console.error('Permission statement generation error:', error);

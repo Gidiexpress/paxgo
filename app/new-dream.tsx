@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,22 +68,24 @@ function CategoryCard({ categoryId, isSelected, onSelect, index }: CategoryCardP
           style={styles.categoryGradient}
         >
           <Text style={styles.categoryIcon}>{category.icon}</Text>
-          <Text
-            style={[
-              styles.categoryTitle,
-              isSelected && styles.categoryTitleSelected,
-            ]}
-          >
-            {category.title}
-          </Text>
-          <Text
-            style={[
-              styles.categoryDescription,
-              isSelected && styles.categoryDescriptionSelected,
-            ]}
-          >
-            {category.description}
-          </Text>
+          <View style={styles.categoryTextContainer}>
+            <Text
+              style={[
+                styles.categoryTitle,
+                isSelected && styles.categoryTitleSelected,
+              ]}
+            >
+              {category.title}
+            </Text>
+            <Text
+              style={[
+                styles.categoryDescription,
+                isSelected && styles.categoryDescriptionSelected,
+              ]}
+            >
+              {category.description}
+            </Text>
+          </View>
 
           {isSelected && (
             <View style={styles.selectedIndicator}>
@@ -132,11 +135,18 @@ export default function NewDreamScreen() {
         `My ${category.title.toLowerCase()} dream`,
       );
 
-      // Navigate to the Five Whys dialogue for this new dream
-      router.replace({
-        pathname: '/new-dream-dialogue',
-        params: { dreamId: dream.id },
-      });
+      // Save context for the chat screen (FiveWhysChatScreen)
+      await Promise.all([
+        AsyncStorage.setItem('@boldmove_dream', dreamText.trim()),
+        AsyncStorage.setItem('@boldmove_stuck_point', JSON.stringify({
+          id: selectedCategory,
+          title: category.title.toLowerCase()
+        })),
+        AsyncStorage.removeItem('@boldmove_current_session') // Force specific new session
+      ]);
+
+      // Navigate to the main chat tab which uses the modern Five Whys UI
+      router.replace('/(tabs)/chat');
     } catch (error) {
       console.error('Error creating dream:', error);
       setIsCreating(false);
@@ -166,9 +176,9 @@ export default function NewDreamScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>New Dream</Text>
+            <Text style={styles.headerTitle} numberOfLines={1}>Design Your Journey</Text>
             <Text style={styles.headerSubtitle}>
-              Dream #{dreams.length + 1}
+              Choose your next bold move
             </Text>
           </View>
 
@@ -197,10 +207,7 @@ export default function NewDreamScreen() {
             <>
               {/* Category Selection */}
               <Animated.View entering={FadeIn} style={styles.stepContent}>
-                <Text style={styles.stepTitle}>What area of life?</Text>
-                <Text style={styles.stepSubtitle}>
-                  Choose the focus for your new bold journey
-                </Text>
+
 
                 <View style={styles.categoriesGrid}>
                   {categories.map((category, index) => (
@@ -244,14 +251,14 @@ export default function NewDreamScreen() {
                     onChangeText={setDreamText}
                     multiline
                     maxLength={200}
-                    autoFocus
+                    autoFocus={false}
                   />
                   <Text style={styles.charCount}>{dreamText.length}/200</Text>
                 </View>
 
                 {/* Inspiration */}
                 <View style={styles.inspirationCard}>
-                  <Text style={styles.inspirationTitle}>💡 Dream Prompts</Text>
+                  <Text style={styles.inspirationTitle}>⚡ Quick Ideas</Text>
                   {getDreamPrompts(selectedCategory).map((prompt, index) => (
                     <TouchableOpacity
                       key={index}
@@ -298,8 +305,8 @@ export default function NewDreamScreen() {
                 {step === 'category'
                   ? 'Continue'
                   : isCreating
-                  ? 'Creating...'
-                  : '✨ Start This Dream'}
+                    ? 'Creating...'
+                    : '✨ Start This Dream'}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -357,7 +364,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
   },
@@ -375,11 +381,13 @@ const styles = StyleSheet.create({
     color: colors.midnightNavy,
   },
   headerCenter: {
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: spacing.sm,
   },
   headerTitle: {
     fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize.xl,
+    fontSize: typography.fontSize['2xl'],
     color: colors.midnightNavy,
   },
   headerSubtitle: {
@@ -451,11 +459,15 @@ const styles = StyleSheet.create({
     fontSize: 32,
     marginRight: spacing.lg,
   },
+  categoryTextContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   categoryTitle: {
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.lg,
     color: colors.midnightNavy,
-    flex: 1,
+    marginBottom: 4,
   },
   categoryTitleSelected: {
     color: colors.white,
@@ -464,12 +476,9 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
     color: colors.gray500,
-    position: 'absolute',
-    bottom: spacing.md,
-    left: 68,
   },
   categoryDescriptionSelected: {
-    color: colors.white + '80',
+    color: colors.white + '90',
   },
   selectedIndicator: {
     width: 28,

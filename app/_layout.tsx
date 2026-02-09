@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform, Alert } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import {
   useFonts,
@@ -20,6 +20,8 @@ import { supabase } from '@/lib/supabase';
 import { colors } from '@/constants/theme';
 import { SnackbarProvider } from '@/contexts/SnackbarContext';
 import { SnackbarContainer } from '@/components/Snackbar';
+import Purchases from 'react-native-purchases';
+import { REVENUECAT_CONFIG } from '@/constants/sub-config';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -39,6 +41,27 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  // Initialize RevenueCat
+  useEffect(() => {
+    const initRevenueCat = async () => {
+      if (Platform.OS === 'android') {
+        const apiKey = REVENUECAT_CONFIG.apiKey;
+        if (apiKey) {
+          try {
+            console.log('[RC] Configuring with key:', apiKey);
+            Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
+            await Purchases.configure({ apiKey });
+            console.log('[RC] Configuration successful');
+          } catch (e: any) {
+            console.error('[RC] Configuration failed:', e);
+            Alert.alert('RevenueCat Error', `Config failed: ${e.message}`);
+          }
+        }
+      }
+    };
+    initRevenueCat();
+  }, []);
 
   if (!fontsLoaded) {
     return (
@@ -70,7 +93,7 @@ export default function RootLayout() {
           >
             <Stack.Screen name="index" />
             <Stack.Screen name="journey" />
-            <Stack.Screen name="onboarding/index" options={{ gestureEnabled: false }} />
+
             <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
             <Stack.Screen
               name="paywall"

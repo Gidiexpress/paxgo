@@ -78,6 +78,56 @@ const STYLE_CONFIGS: Record<PermissionSlipVisualStyle, StyleConfig> = {
     sealColor: colors.champagneGold,
     flourish: '◆',
   },
+  classic: {
+    name: 'Classic',
+    description: 'Timeless elegance',
+    backgroundColors: ['#FDF8ED', '#F5EDD6', '#FDF8ED'],
+    accentColor: '#D4C4A8',
+    textColor: colors.midnightNavy,
+    borderStyle: 'clean',
+    sealColor: colors.boldTerracotta,
+    flourish: '✦',
+  },
+  royal: {
+    name: 'Royal',
+    description: 'Regal and prestigious',
+    backgroundColors: ['#FBF7E9', '#E8DFC6', '#FBF7E9'],
+    accentColor: '#D4AF37',
+    textColor: colors.midnightNavy,
+    borderStyle: 'geometric',
+    sealColor: colors.champagneGold,
+    flourish: '👑',
+  },
+  cosmic: {
+    name: 'Cosmic',
+    description: 'Stardust and magic',
+    backgroundColors: ['#F5F3FF', '#E8E4F7', '#F5F3FF'],
+    accentColor: '#A78BFA',
+    textColor: colors.midnightNavy,
+    borderStyle: 'geometric',
+    sealColor: '#8B5CF6',
+    flourish: '✨',
+  },
+  sisterhood: {
+    name: 'Sisterhood',
+    description: 'Warmth and connection',
+    backgroundColors: ['#FFF5F5', '#FFECEC', '#FFF5F5'],
+    accentColor: '#FDA4AF',
+    textColor: colors.midnightNavy,
+    borderStyle: 'organic', // Using organic for softer feel
+    sealColor: '#F43F5E',
+    flourish: '💫',
+  },
+  'future-self': {
+    name: 'Future Self',
+    description: 'Bold vision of tomorrow',
+    backgroundColors: ['#F0F9FF', '#E0F2FE', '#F0F9FF'],
+    accentColor: '#38BDF8',
+    textColor: colors.midnightNavy,
+    borderStyle: 'geometric',
+    sealColor: colors.vibrantTeal,
+    flourish: '🌟',
+  },
 };
 
 interface DigitalPermissionSlipProps {
@@ -156,6 +206,7 @@ function SignatureCanvas({
       >
         <Svg style={StyleSheet.absoluteFill}>
           {paths.map((path, index) => (
+            // @ts-ignore
             <Path
               key={index}
               d={path}
@@ -268,7 +319,7 @@ function WaxSeal({
   }, [signed, animated]);
 
   const sealAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { rotate: `${rotation.value}deg` }],
+    transform: [{ scale: scale.value }, { rotate: rotation.value + 'deg' }],
     opacity: scale.value,
   }));
 
@@ -355,15 +406,15 @@ export function DigitalPermissionSlip({
 
   const formattedDate = signedAt
     ? new Date(signedAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
     : new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      });
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
 
   const Container = animated ? Animated.View : View;
   const entering = animated ? FadeInDown.duration(600).springify() : undefined;
@@ -379,9 +430,10 @@ export function DigitalPermissionSlip({
           style={styles.card}
         >
           {/* Border decoration based on style */}
-          {visualStyle === 'minimalist' && <MinimalistBorder config={config} />}
-          {visualStyle === 'floral' && <FloralBorder config={config} />}
-          {visualStyle === 'modern' && <ModernBorder config={config} />}
+          {/* Border decoration based on style configuration */}
+          {config.borderStyle === 'clean' && <MinimalistBorder config={config} />}
+          {config.borderStyle === 'organic' && <FloralBorder config={config} />}
+          {config.borderStyle === 'geometric' && <ModernBorder config={config} />}
 
           {/* Header */}
           <View style={styles.header}>
@@ -526,7 +578,7 @@ export function PermissionSlipStyleSelector({
   selectedStyle: PermissionSlipVisualStyle;
   onSelectStyle: (style: PermissionSlipVisualStyle) => void;
 }) {
-  const styles_arr: PermissionSlipVisualStyle[] = ['minimalist', 'floral', 'modern'];
+  const styles_arr: PermissionSlipVisualStyle[] = ['minimalist', 'floral', 'modern', 'classic', 'royal', 'cosmic', 'sisterhood', 'future-self'];
 
   return (
     <View style={selectorStyles.container}>
@@ -1072,3 +1124,86 @@ const selectorStyles = StyleSheet.create({
 });
 
 export { STYLE_CONFIGS };
+
+// Compact version for lists/archive
+export function PermissionSlipCompact({
+  slip,
+  style = 'classic',
+}: {
+  slip: { title: string; permission: string; signedBy: string; permission_statement?: string };
+  style?: PermissionSlipVisualStyle;
+}) {
+  const config = STYLE_CONFIGS[style] || STYLE_CONFIGS['minimalist'];
+  // Handle both data shapes (legacy vs database)
+  const permissionText = slip.permission || slip.permission_statement || 'Permission granted';
+  const signerText = slip.signedBy || 'Bold Dreamer';
+
+  return (
+    <View style={compactStyles.container}>
+      <LinearGradient
+        colors={config.backgroundColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={compactStyles.paper}
+      >
+        <View style={[compactStyles.border, { borderColor: config.accentColor }]}>
+          <View style={compactStyles.header}>
+            <Text style={compactStyles.flourish}>{config.flourish}</Text>
+            <Text style={compactStyles.title} numberOfLines={1}>
+              {slip.title || 'Permission Slip'}
+            </Text>
+          </View>
+          <Text style={[compactStyles.permission, { color: config.textColor }]} numberOfLines={2}>
+            {permissionText}
+          </Text>
+          <Text style={compactStyles.signed}>— {signerText}</Text>
+        </View>
+      </LinearGradient>
+    </View>
+  );
+}
+
+const compactStyles = StyleSheet.create({
+  container: {
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  paper: {
+    borderRadius: borderRadius.md,
+    padding: 2,
+  },
+  border: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: borderRadius.md - 1,
+    borderWidth: 1,
+    padding: spacing.md,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  flourish: {
+    fontSize: 14,
+    marginRight: spacing.xs,
+  },
+  title: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.midnightNavy,
+    flex: 1,
+  },
+  permission: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    lineHeight: 18,
+    marginBottom: spacing.xs,
+  },
+  signed: {
+    fontFamily: typography.fontFamily.bodyMedium,
+    fontSize: typography.fontSize.xs,
+    color: colors.gray500,
+    fontStyle: 'italic',
+    textAlign: 'right',
+  },
+});
