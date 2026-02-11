@@ -18,5 +18,9 @@ Understanding the problem, target audience, and monetization model.
 
 A narrative journey of how the project was built, challenges faced, and lessons learned.
 
+### [Privacy Policy](./privacy.md)
+
+Official legal document for Play Store compliance.
+
 ---
 *Built with ❤️ for PaxGo*
