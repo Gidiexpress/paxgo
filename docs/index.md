@@ -26,5 +26,9 @@ Official legal document for Play Store compliance.
 
 Step-by-step guide for setting up revenue and products in the Play Console.
 
+### [Service Account Setup](./google-play-service-account.md)
+
+How to link Google Play to RevenueCat using a JSON credentials key.
+
 ---
 *Built with ❤️ for PaxGo*
