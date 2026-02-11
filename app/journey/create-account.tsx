@@ -50,7 +50,7 @@ export default function CreateAccountScreen() {
     isAuthenticated,
   } = useAuth();
 
-  const [authMode, setAuthMode] = useState<AuthMode>('social');
+  const [authMode, setAuthMode] = useState<AuthMode>('email-signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -181,69 +181,7 @@ export default function CreateAccountScreen() {
     }
   }, [error, authMode, clearError, showError, showInfo]);
 
-  const handleGoogleSignIn = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showInfo('Connecting with Google...', {
-      icon: '✨',
-      duration: 2000,
-    });
-    try {
-      clearError();
-      console.log('🔐 Starting Google sign-in...');
-      await signInWithGoogle();
-      console.log('✅ Google sign-in completed');
 
-      // Wait for database trigger and check session
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        console.log('✅ Session created successfully');
-      } else {
-        console.log('⚠️ No session found after Google sign-in');
-        showError('Sign in was cancelled or failed. Please try again', {
-          icon: '⚠️',
-          duration: 4000,
-        });
-      }
-      // Navigation will be handled by the auth state listener
-    } catch (err) {
-      console.error('❌ Google sign in error:', err);
-      // Error handling done by error effect
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    showInfo('Connecting with Apple...', {
-      icon: '✨',
-      duration: 2000,
-    });
-    try {
-      clearError();
-      console.log('🔐 Starting Apple sign-in...');
-      await signInWithApple();
-      console.log('✅ Apple sign-in completed');
-
-      // Wait for database trigger and check session
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        console.log('✅ Session created successfully');
-      } else {
-        console.log('⚠️ No session found after Apple sign-in');
-        showError('Sign in was cancelled or failed. Please try again', {
-          icon: '⚠️',
-          duration: 4000,
-        });
-      }
-      // Navigation will be handled by the auth state listener
-    } catch (err) {
-      console.error('❌ Apple sign in error:', err);
-      // Error handling done by error effect
-    }
-  };
 
   const handleEmailSubmit = async () => {
     // Immediate haptic feedback on button press
@@ -442,66 +380,7 @@ export default function CreateAccountScreen() {
     </View>
   );
 
-  const renderSocialAuth = () => (
-    <Animated.View entering={FadeInDown.delay(200)} style={styles.authSection}>
-      {/* Google Sign In */}
-      <TouchableOpacity
-        style={styles.socialButton}
-        onPress={handleGoogleSignIn}
-        disabled={isLoading}
-      >
-        <View style={styles.socialIconContainer}>
-          <Text style={styles.socialIcon}>G</Text>
-        </View>
-        <Text style={styles.socialButtonText}>Continue with Google</Text>
-      </TouchableOpacity>
 
-      {/* Apple Sign In - iOS only */}
-      {Platform.OS === 'ios' && (
-        <TouchableOpacity
-          style={[styles.socialButton, styles.appleButton]}
-          onPress={handleAppleSignIn}
-          disabled={isLoading}
-        >
-          <View style={styles.socialIconContainer}>
-            <Text style={[styles.socialIcon, styles.appleIcon]}></Text>
-          </View>
-          <Text style={[styles.socialButtonText, styles.appleButtonText]}>
-            Continue with Apple
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>or</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Email options */}
-      <TouchableOpacity
-        style={styles.emailOptionButton}
-        onPress={() => switchToEmailMode('email-signup')}
-      >
-        <LinearGradient
-          colors={[colors.vibrantTeal, colors.tealDark]}
-          style={styles.emailOptionGradient}
-        >
-          <Text style={styles.emailOptionText}>Sign up with Email</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.textButton}
-        onPress={() => switchToEmailMode('email-signin')}
-      >
-        <Text style={styles.textButtonText}>
-          Already have an account? <Text style={styles.textButtonLink}>Sign In</Text>
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
 
   const renderEmailForm = () => (
     <Animated.View entering={FadeInDown.delay(200)} style={styles.authSection}>
@@ -566,15 +445,7 @@ export default function CreateAccountScreen() {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity
-        style={styles.textButton}
-        onPress={() => {
-          clearError();
-          setAuthMode('social');
-        }}
-      >
-        <Text style={styles.textButtonText}>← Back to sign in options</Text>
-      </TouchableOpacity>
+
 
       {authMode === 'email-signin' && (
         <TouchableOpacity
@@ -788,7 +659,7 @@ export default function CreateAccountScreen() {
           </Animated.View>
 
           {/* Auth Section */}
-          {authMode === 'social' && renderSocialAuth()}
+
           {(authMode === 'email-signin' || authMode === 'email-signup') && renderEmailForm()}
           {authMode === 'forgot-password' && renderForgotPasswordForm()}
 
@@ -927,32 +798,6 @@ const styles = StyleSheet.create({
   appleButton: {
     backgroundColor: colors.midnightNavy,
     borderColor: colors.midnightNavy,
-  },
-  socialIconContainer: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  socialIcon: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.midnightNavy,
-  },
-  appleIcon: {
-    color: colors.white,
-  },
-  socialButtonText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.midnightNavy,
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 36, // Offset for icon
-  },
-  appleButtonText: {
-    color: colors.white,
   },
   divider: {
     flexDirection: 'row',
