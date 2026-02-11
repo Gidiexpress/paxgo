@@ -396,8 +396,8 @@ export default function NotificationSettingsScreen() {
 
             <TimePickerRow
               icon="⏰"
-              title="Coaching Time"
-              description="When should Gabby check in?"
+              title="Daily Nudge Time"
+              description="Time for your daily nudge"
               time={preferences.dailyNudge.time}
               onTimeChange={setDailyNudgeTime}
               disabled={!masterEnabled || !preferences.dailyNudge.enabled}
@@ -407,7 +407,7 @@ export default function NotificationSettingsScreen() {
 
         {/* Morning Reframe */}
         <Animated.View entering={FadeInDown.delay(300)} style={styles.section}>
-          <Text style={styles.sectionTitle}>Gabby&apos;s Morning Reframe</Text>
+          <Text style={styles.sectionTitle}>PaxGo Morning Reframe</Text>
           <Text style={styles.sectionDescription}>
             Mindset shifts and motivational thoughts to start your day
           </Text>

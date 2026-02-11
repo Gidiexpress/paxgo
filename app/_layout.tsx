@@ -22,6 +22,7 @@ import { SnackbarProvider } from '@/contexts/SnackbarContext';
 import { SnackbarContainer } from '@/components/Snackbar';
 import Purchases from 'react-native-purchases';
 import { REVENUECAT_CONFIG } from '@/constants/sub-config';
+import { RoadmapProvider } from '@/contexts/RoadmapContext';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -36,34 +37,46 @@ export default function RootLayout() {
     Inter_700Bold,
   });
 
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
+  const [isReady, setIsReady] = React.useState(false);
 
-  // Initialize RevenueCat
   useEffect(() => {
-    const initRevenueCat = async () => {
-      if (Platform.OS === 'android') {
-        const apiKey = REVENUECAT_CONFIG.apiKey;
-        if (apiKey) {
-          try {
-            console.log('[RC] Configuring with key:', apiKey);
+    const initApp = async () => {
+      try {
+        console.log('[RC] initApp started');
+        if (Platform.OS === 'android') {
+          const apiKey = REVENUECAT_CONFIG.apiKey;
+          console.log('[RC] API Key:', apiKey);
+
+          if (apiKey) {
             Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
             await Purchases.configure({ apiKey });
             console.log('[RC] Configuration successful');
-          } catch (e: any) {
-            console.error('[RC] Configuration failed:', e);
-            Alert.alert('RevenueCat Error', `Config failed: ${e.message}`);
+            // Alert.alert('RC Configured', 'Success!'); 
+          } else {
+            console.error('[RC] No API Key found!');
+            Alert.alert('Config Error', 'No RevenueCat API Key found in .env');
           }
+        } else {
+          console.log('[RC] access limited to Android for now');
         }
+      } catch (e: any) {
+        console.error('[RC] Configuration failed:', e);
+        Alert.alert('RC Config Failed', e.message);
+      } finally {
+        setIsReady(true);
       }
     };
-    initRevenueCat();
+
+    initApp();
   }, []);
 
-  if (!fontsLoaded) {
+  useEffect(() => {
+    if (fontsLoaded && isReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded, isReady]);
+
+  if (!fontsLoaded || !isReady) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.boldTerracotta} />
@@ -82,43 +95,45 @@ export default function RootLayout() {
           guest: [],
         }}
       >
-        <SnackbarProvider>
-          <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: 'slide_from_right',
-              contentStyle: { backgroundColor: colors.parchmentWhite },
-            }}
-          >
-            <Stack.Screen name="index" />
-            <Stack.Screen name="journey" />
+        <RoadmapProvider>
+          <SnackbarProvider>
+            <StatusBar style="dark" />
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                animation: 'slide_from_right',
+                contentStyle: { backgroundColor: colors.parchmentWhite },
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="journey" />
 
-            <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
-            <Stack.Screen
-              name="paywall"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen
-              name="add-proof"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-            <Stack.Screen
-              name="add-action"
-              options={{
-                presentation: 'modal',
-                animation: 'slide_from_bottom',
-              }}
-            />
-          </Stack>
-          <SnackbarContainer />
-        </SnackbarProvider>
+              <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+              <Stack.Screen
+                name="paywall"
+                options={{
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }}
+              />
+              <Stack.Screen
+                name="add-proof"
+                options={{
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }}
+              />
+              <Stack.Screen
+                name="add-action"
+                options={{
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }}
+              />
+            </Stack>
+            <SnackbarContainer />
+          </SnackbarProvider>
+        </RoadmapProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );

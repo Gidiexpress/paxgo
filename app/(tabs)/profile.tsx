@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,11 +19,11 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DreamSwitcher } from '@/components/DreamSwitcher';
 import { NotificationPrePrompt } from '@/components/NotificationPrePrompt';
-import { useUser, useOnboarding, useDreamProgress } from '@/hooks/useStorage';
+import { useUser, useOnboarding } from '@/hooks/useStorage';
 import { useAuth } from '@fastshot/auth';
 import { supabase } from '@/lib/supabase';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useDreams } from '@/hooks/useDreams';
+import { useRoadmap } from '@/hooks/useRoadmap';
 import { useBoostStore } from '@/hooks/useBoostStore';
 import { useNotifications } from '@/hooks/useNotifications';
 import { stuckPoints } from '@/constants/stuckPoints';
@@ -34,7 +35,17 @@ export default function ProfileScreen() {
   const { user, updateUser } = useUser();
   const { resetOnboarding } = useOnboarding();
   const { signOut, user: authUser } = useAuth();
-  const { progress } = useDreamProgress();
+
+  // Use roadmap hook for real data
+  const {
+    roadmaps,
+    activeRoadmap,
+    fetchRoadmaps,
+    setActiveRoadmap,
+    globalCompletedCount,
+    currentStreak,
+    loading
+  } = useRoadmap();
 
   // Sync profile data from Supabase
   useEffect(() => {
@@ -47,9 +58,6 @@ export default function ProfileScreen() {
           .single();
 
         if (data && !error && data.name) {
-          // accessing user from useUser could be stale inside useEffect if not in deps, but here we just want to update
-          // actually, checking against user.name prevents loops if user is in deps.
-          // Let's just update if it's different or if local is missing
           if (user?.name !== data.name) {
             await updateUser({ name: data.name });
           }
@@ -58,9 +66,10 @@ export default function ProfileScreen() {
     };
 
     syncProfile();
+    fetchRoadmaps(); // Ensure fresh data
   }, [authUser?.id]); // Run when auth user is available
+
   const { subscription, isPremium } = useSubscription();
-  const { dreams, activeDreamId, switchDream } = useDreams();
   const { unreadCount } = useBoostStore();
 
   // Notification hook
@@ -69,11 +78,11 @@ export default function ProfileScreen() {
     shouldShowPrePrompt,
     requestPermission,
     markPrePromptShown,
-  } = useNotifications(progress?.currentStreak || 0);
+  } = useNotifications(currentStreak);
 
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
 
-  const stuckPoint = stuckPoints.find((s) => s.id === user?.stuckPoint);
+  // const stuckPoint = stuckPoints.find((s) => s.id === user?.stuckPoint);
 
   const handleResetOnboarding = async () => {
     Alert.alert(
@@ -100,10 +109,15 @@ export default function ProfileScreen() {
   }, [router]);
 
   const handleSwitchDream = useCallback(
-    async (dreamId: string) => {
-      await switchDream(dreamId);
+    async (roadmapId: string) => {
+      const selected = roadmaps.find(r => r.id === roadmapId);
+      if (selected) {
+        await setActiveRoadmap(selected);
+        // Navigate to roadmap view to see it
+        router.push('/roadmap');
+      }
     },
-    [switchDream]
+    [roadmaps, setActiveRoadmap, router]
   );
 
   const handleNotificationPress = useCallback(() => {
@@ -137,7 +151,7 @@ export default function ProfileScreen() {
       icon: '💬',
       title: 'Start Coaching Session',
       subtitle: 'Get AI coaching & reflection',
-      onPress: () => router.push('/new-dream'),
+      onPress: () => router.push('/new-dream'), // Assuming this is where chat starts for now
       isGabby: true,
     },
     {
@@ -177,7 +191,7 @@ export default function ProfileScreen() {
     {
       icon: '🏅',
       title: 'All Achievements',
-      subtitle: `${progress?.completedActions || 0} actions completed`,
+      subtitle: `${globalCompletedCount} actions completed`,
       onPress: () => router.push('/(tabs)/wins'),
     },
   ];
@@ -255,20 +269,28 @@ export default function ProfileScreen() {
 
           {/* Stats */}
           <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{dreams.length}</Text>
-              <Text style={styles.statLabel}>Dreams</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{progress?.completedActions || 0}</Text>
-              <Text style={styles.statLabel}>Actions</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{progress?.currentStreak || 0}</Text>
-              <Text style={styles.statLabel}>Streak</Text>
-            </View>
+            {loading ? (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.sm }}>
+                <ActivityIndicator size="small" color={colors.boldTerracotta} />
+              </View>
+            ) : (
+              <>
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{roadmaps.length}</Text>
+                  <Text style={styles.statLabel}>Dreams</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{globalCompletedCount}</Text>
+                  <Text style={styles.statLabel}>Actions</Text>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statNumber}>{currentStreak}</Text>
+                  <Text style={styles.statLabel}>Streak</Text>
+                </View>
+              </>
+            )}
           </View>
         </Animated.View>
 
@@ -286,8 +308,8 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
           <DreamSwitcher
-            dreams={dreams}
-            activeDreamId={activeDreamId}
+            dreams={roadmaps}
+            activeDreamId={activeRoadmap?.id || null}
             onSwitchDream={handleSwitchDream}
             onNewDream={handleNewDream}
           />

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,8 +47,11 @@ export default function WinsScreen() {
   const {
     activeRoadmap,
     roadmaps,
-    completedCount: roadmapCompletedCount,
-    totalCount: roadmapTotalCount
+    completedCount: activeCompletedCount,
+    totalCount: activeTotalCount,
+    globalCompletedCount,
+    currentStreak,
+    loading
   } = useRoadmap();
   const { isPremium } = useSubscription();
   const { permissionSlips } = usePermissionSlips();
@@ -61,12 +65,14 @@ export default function WinsScreen() {
     return roadmaps.filter(r => r.status === 'completed');
   }, [roadmaps]);
 
-  // Derive display stats from active/roadmap data
-  const completedCount = roadmapCompletedCount;
-  // Progress is explicitly calculated from total actions in roadmap
-  const dreamProgress = roadmapTotalCount > 0 ? completedCount / roadmapTotalCount : 0;
+  // Derive display stats
+  // "Actions Done" and Milestones should reflect GLOBAL progress
+  const displayCompletedCount = globalCompletedCount || 0;
 
-  const nextMilestone = milestones.find((m) => completedCount < m.required);
+  // Progress for the MAIN MAP should reflect the ACTIVE roadmap
+  const dreamProgress = activeTotalCount > 0 ? activeCompletedCount / activeTotalCount : 0;
+
+  const nextMilestone = milestones.find((m) => displayCompletedCount < m.required);
 
   const handleProofPress = (proof: ProofEntry) => {
     setSelectedProof(proof);
@@ -111,7 +117,7 @@ export default function WinsScreen() {
             contentContainerStyle={styles.milestonesScroll}
           >
             {milestones.map((milestone, index) => {
-              const isUnlocked = completedCount >= milestone.required;
+              const isUnlocked = displayCompletedCount >= milestone.required;
               return (
                 <View
                   key={milestone.id}
@@ -149,20 +155,32 @@ export default function WinsScreen() {
 
         {/* Progress Stats */}
         <Animated.View entering={FadeInDown.delay(300)} style={styles.statsSection}>
-          <View style={styles.statsRow}>
-            <Card style={styles.statCard}>
-              <Text style={styles.statNumber}>{completedCount}</Text>
-              <Text style={styles.statLabel}>Actions Done</Text>
-            </Card>
-            <Card style={styles.statCard}>
-              <Text style={styles.statNumber}>0</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </Card>
-            <Card style={styles.statCard}>
-              <Text style={styles.statNumber}>{proofs.length}</Text>
-              <Text style={styles.statLabel}>Proofs</Text>
-            </Card>
-          </View>
+          {loading ? (
+            <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={colors.boldTerracotta} />
+              <Text style={{
+                marginTop: spacing.sm,
+                fontFamily: typography.fontFamily.body,
+                fontSize: typography.fontSize.xs,
+                color: colors.gray500
+              }}>Updating stats...</Text>
+            </View>
+          ) : (
+            <View style={styles.statsRow}>
+              <Card style={styles.statCard}>
+                <Text style={styles.statNumber}>{displayCompletedCount}</Text>
+                <Text style={styles.statLabel}>Actions Done</Text>
+              </Card>
+              <Card style={styles.statCard}>
+                <Text style={styles.statNumber}>{currentStreak || currentStreak}</Text>
+                <Text style={styles.statLabel}>Day Streak</Text>
+              </Card>
+              <Card style={styles.statCard}>
+                <Text style={styles.statNumber}>{proofs.length}</Text>
+                <Text style={styles.statLabel}>Proofs</Text>
+              </Card>
+            </View>
+          )}
         </Animated.View>
 
         {/* Completed Dreams (Roadmaps) Section */}
@@ -227,7 +245,7 @@ export default function WinsScreen() {
                     Next: {nextMilestone.title}
                   </Text>
                   <Text style={styles.nextMilestoneProgress}>
-                    {nextMilestone.required - completedCount} actions to go
+                    {nextMilestone.required - displayCompletedCount} actions to go
                   </Text>
                 </View>
               </View>
@@ -237,7 +255,7 @@ export default function WinsScreen() {
                     styles.nextMilestoneBarFill,
                     {
                       width: `${Math.min(
-                        (completedCount / nextMilestone.required) * 100,
+                        (displayCompletedCount / nextMilestone.required) * 100,
                         100
                       )}%`,
                     },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,11 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
-import { Dream, DREAM_CATEGORIES } from '@/types/dreams';
+import { DREAM_CATEGORIES, DreamCategory } from '@/types/dreams';
+import { ActionRoadmapWithActions } from '@/types/database';
 
 interface DreamSwitcherProps {
-  dreams: Dream[];
+  dreams: ActionRoadmapWithActions[]; // Renamed from roadmaps for prop compatibility or clarity? Let's keep 'dreams' prop name but typed as roadmaps
   activeDreamId: string | null;
   onSwitchDream: (dreamId: string) => void;
   onNewDream: () => void;
@@ -38,8 +39,37 @@ export function DreamSwitcher({
 }: DreamSwitcherProps) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const activeDream = dreams.find((d) => d.id === activeDreamId);
-  const categoryInfo = activeDream ? DREAM_CATEGORIES[activeDream.category] : null;
+  // Helper to process roadmap data for display
+  const processedDreams = useMemo(() => {
+    return dreams.map(dream => {
+      const actions = dream.actions || [];
+      const completedActions = actions.filter(a => a.is_completed).length;
+      const totalActions = actions.length;
+
+      // Infer category from first action or default
+      const firstAction = actions[0];
+      const categoryKey = (firstAction?.category as DreamCategory) || 'career';
+      const category = DREAM_CATEGORIES[categoryKey] || DREAM_CATEGORIES.career;
+
+      // Calculate simple streak (actions completed today/yesterday nested check is expensive, 
+      // maybe just show completion % or count for now to be fast)
+      // Actually, let's just use completed count.
+
+      return {
+        ...dream,
+        stats: {
+          completed: completedActions,
+          total: totalActions,
+          progress: totalActions > 0 ? completedActions / totalActions : 0
+        },
+        categoryInfo: category,
+        categoryKey
+      };
+    });
+  }, [dreams]);
+
+  const activeDream = processedDreams.find((d) => d.id === activeDreamId);
+  const categoryInfo = activeDream?.categoryInfo || null;
 
   const handleOpen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -92,7 +122,9 @@ export function DreamSwitcher({
                 {categoryInfo?.icon || '🎯'}
               </Text>
               <View style={styles.currentDreamText}>
-                <Text style={styles.currentDreamLabel}>Active Dream</Text>
+                <Text style={styles.currentDreamLabel}>
+                  {activeDreamId ? (activeDream?.status === 'completed' ? 'Completed Dream' : 'Active Dream') : 'Select Dream'}
+                </Text>
                 <Text style={styles.currentDreamTitle} numberOfLines={1}>
                   {activeDream?.title || 'No dream selected'}
                 </Text>
@@ -111,13 +143,13 @@ export function DreamSwitcher({
                   style={[
                     styles.progressFill,
                     {
-                      width: `${activeDream.progress.totalActions > 0 ? (activeDream.progress.completedActions / activeDream.progress.totalActions) * 100 : 0}%`,
+                      width: `${activeDream.stats.progress * 100}%`,
                     },
                   ]}
                 />
               </View>
               <Text style={styles.progressText}>
-                {activeDream.progress.completedActions} / {activeDream.progress.totalActions} actions
+                {activeDream.stats.completed} / {activeDream.stats.total} actions
               </Text>
             </View>
           )}
@@ -148,9 +180,9 @@ export function DreamSwitcher({
               style={styles.dreamList}
               showsVerticalScrollIndicator={false}
             >
-              {dreams.map((dream, index) => {
-                const category = DREAM_CATEGORIES[dream.category];
+              {processedDreams.map((dream, index) => {
                 const isActive = dream.id === activeDreamId;
+                const isCompleted = dream.status === 'completed';
 
                 return (
                   <Animated.View
@@ -162,35 +194,46 @@ export function DreamSwitcher({
                       style={[
                         styles.dreamItem,
                         isActive && styles.dreamItemActive,
+                        isCompleted && styles.dreamItemCompleted
                       ]}
                     >
                       <View
                         style={[
                           styles.dreamIconContainer,
-                          { backgroundColor: category.gradient[0] + '20' },
+                          { backgroundColor: dream.categoryInfo.gradient[0] + '20' },
                         ]}
                       >
-                        <Text style={styles.dreamIcon}>{category.icon}</Text>
+                        <Text style={styles.dreamIcon}>{dream.categoryInfo.icon}</Text>
                       </View>
 
                       <View style={styles.dreamInfo}>
                         <Text style={styles.dreamTitle} numberOfLines={1}>
                           {dream.title}
                         </Text>
-                        <Text style={styles.dreamCategory}>{category.title}</Text>
+                        <Text style={styles.dreamCategory}>
+                          {isCompleted ? 'Completed • ' : ''}{dream.categoryInfo.title}
+                        </Text>
                         <View style={styles.dreamStats}>
                           <Text style={styles.dreamStat}>
-                            🔥 {dream.progress.currentStreak} streak
+                            ✅ {dream.stats.completed}/{dream.stats.total}
                           </Text>
+                          {/* 
                           <Text style={styles.dreamStat}>
-                            ✅ {dream.progress.completedActions} done
-                          </Text>
+                            🔥 Streak hidden
+                          </Text> 
+                          */}
                         </View>
                       </View>
 
                       {isActive && (
                         <View style={styles.activeBadge}>
                           <Text style={styles.activeBadgeText}>Active</Text>
+                        </View>
+                      )}
+
+                      {isCompleted && !isActive && (
+                        <View style={styles.completedBadge}>
+                          <Text style={styles.completedBadgeText}>✓</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -445,5 +488,22 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.base,
     color: colors.white,
+  },
+  dreamItemCompleted: {
+    opacity: 0.8,
+    backgroundColor: colors.gray100,
+  },
+  completedBadge: {
+    backgroundColor: colors.success + '20', // Green tint
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.success
+  },
+  completedBadgeText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: 10,
+    color: colors.success,
   },
 });

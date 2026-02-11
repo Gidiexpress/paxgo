@@ -21,7 +21,7 @@ interface WeavingAnimationProps {
 
 export function WeavingAnimation({
   message = 'Crafting your Golden Path...',
-  submessage = 'Gabby is weaving your personalized strategy'
+  submessage = 'Weaving your personalized strategy'
 }: WeavingAnimationProps) {
   // Animation values for threads
   const thread1Progress = useSharedValue(0);

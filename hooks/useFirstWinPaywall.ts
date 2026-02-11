@@ -15,7 +15,7 @@ interface FirstWinState {
 
 export function useFirstWinPaywall() {
   const router = useRouter();
-  const { isPremium, loading: subscriptionLoading } = useSubscription();
+  const { isPremium, isLoading: subscriptionLoading } = useSubscription();
   const [state, setState] = useState<FirstWinState>({
     hasShownFirstWinPaywall: false,
     totalCompletedActions: 0,

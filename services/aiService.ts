@@ -161,7 +161,7 @@ COGNITIVE TECHNIQUES FOR LEARNING:
 };
 
 // Sophisticated AI Coach persona - Premium mindset coach AND versatile assistant
-const GABBY_SYSTEM_PROMPT = `You are AI Coach, a versatile AI assistant and mindset coach in The Bold Move app. You combine the warmth of a trusted friend with the insight of a skilled coach.
+const GABBY_SYSTEM_PROMPT = `You are the "PaxGo Coach", a versatile AI assistant and mindset coach in the PaxGo app. You combine the warmth of a trusted friend with the insight of a skilled coach.
 
 YOUR CORE IDENTITY:
 - You're a helpful, knowledgeable assistant who can answer questions on any topic
@@ -225,10 +225,10 @@ FORMAT (respond EXACTLY as JSON):
 
 TONE: Ceremonial yet intimate. Like receiving a secret decree from a benevolent queen.`;
 
-const MICRO_ACTION_PROMPT = `You are a luxury productivity architect who transforms dreams into exquisite micro-moments of progress. Each action you create should feel like an invitation to elegance, not a chore.
+const MICRO_ACTION_PROMPT = `You are a luxury productivity architect who transforms dreams into concrete, actionable steps. Each action you create should feel like a clear instruction, not an abstract idea.
 
-CREATE 3-5 MICRO-ACTIONS THAT:
-- Can genuinely be completed in 5 minutes or less
+CREATE 5-8 MICRO-ACTIONS THAT:
+- Can genuinely be completed in 5-10 minutes
 - Feel sophisticated and intentional, not basic or boring
 - Progress from grounding to slightly bolder
 - Use evocative, aspirational language
@@ -242,9 +242,9 @@ ACTION NAMING STYLE:
 FORMAT (respond EXACTLY as JSON array):
 [
   {
-    "title": "Elegant action title (5-8 words max)",
-    "description": "Specific, sophisticated description of exactly what to do",
-    "duration": 5,
+    "title": "Action title (no 'Micro-Action:' prefix)",
+    "description": "Specific, concrete instructions on exactly what to do",
+    "duration": 10,
     "category": "research|planning|action|reflection|connection",
     "difficultyLevel": 1
   }
@@ -848,15 +848,17 @@ export interface RoadmapActionData {
 // Roadmap generation response
 export interface RoadmapGenerationResponse {
   success: boolean;
-  roadmap_title?: string;
-  actions?: RoadmapActionData[];
+  roadmap?: {
+    roadmap_title: string;
+    actions: RoadmapActionData[];
+  };
   error?: string;
 }
 
 // Prompt for generating strategic roadmap actions
-const ROADMAP_GENERATION_PROMPT = `You are AI Coach, a luxury life architect who transforms big dreams into elegant, achievable paths. You create "Golden Path" roadmaps—strategic sequences of micro-actions that feel like stepping stones across a beautiful garden, not a mountain to climb.
+const ROADMAP_GENERATION_PROMPT = `You are the PaxGo Coach, a practical life architect who transforms big dreams into a concrete, realistic plan. You create "Golden Path" roadmaps—strategic sequences of small, doable actions that inevitably lead to the goal.
 
-YOUR TASK: Generate a deeply broken-down roadmap with 3 MAJOR PHASES (Milestones). Each Phase must contain 3-5 specific MICRO-ACTIONS.
+YOUR TASK: Generate a comprehensive roadmap with 3 MAJOR PHASES. Each Phase must contain 5-8 specific ACTIONS. Do NOT suggest abstract ideas. Suggest concrete things the user can DO.
 
 STRUCTURE:
 1. **PHASES (Parent Actions)**: These are the high-level milestones. (e.g., "Designing the Vision", "Building the Foundation", "Launching to the World").
@@ -878,7 +880,7 @@ For each Phase (Parent Action):
 5. "gabby_tip": A mindset tip for this stage of the journey.
 6. "category": Dominant category [research, planning, action, reflection, connection].
 7. "order_index": 0, 1, 2...
-8. "sub_steps": **3-5 MICRO-ACTIONS** (Required).
+8. "sub_steps": **5-8 ACTIONS** (Required). Ensure there are enough steps to actually achieve the phase goal.
    - "title": The specific tiny task (e.g., "Create a fastmoodboard")
    - "description": Exactly how to do it in 5 mins.
    - "duration_minutes": 5-15 mins.
@@ -908,23 +910,19 @@ RESPOND AS JSON:
   ]
 }`;
 
-// Generate a complete roadmap of strategic micro-actions
+// Generate a complete roadmap of strategic actions
 export async function generateRoadmapActions(
   dream: string,
-  rootMotivation?: string
+  rootMotivation: string,
+  completedActions: number = 0
 ): Promise<RoadmapGenerationResponse> {
   try {
-    const motivationContext = rootMotivation
-      ? `\n\nUSER'S ROOT MOTIVATION (from their Five Whys journey):\n"${rootMotivation}"\n\nThis is their DEEP WHY. Every phase must honor this.`
-      : '\n\nNo specific root motivation provided. Focus on universal themes of growth and freedom.';
-
     const prompt = `${ROADMAP_GENERATION_PROMPT}
-${motivationContext}
 
-USER'S BIG DREAM:
-"${dream}"
+DREAM: "${dream}"
+ROOT MOTIVATION: "${rootMotivation}"
 
-Generate a Deep Golden Path roadmap with 3 Phases, each with 3-5 Micro-Actions. Respond ONLY with valid JSON:`;
+Generate a Deep Golden Path roadmap with 3 Phases, each with 5-8 Actions. Respond ONLY with valid JSON:`;
 
     const response = await generateTextGroq({ prompt, maxTokens: 4096 }); // Increased tokens for deep roadmap
 
@@ -935,8 +933,10 @@ Generate a Deep Golden Path roadmap with 3 Phases, each with 3-5 Micro-Actions. 
         const data = JSON.parse(jsonMatch[0]);
         return {
           success: true,
-          roadmap_title: data.roadmap_title || 'Your Golden Path',
-          actions: data.actions || [],
+          roadmap: {
+            roadmap_title: data.roadmap_title || 'Your Golden Path',
+            actions: data.actions || [],
+          }
         };
       } catch (parseError) {
         console.warn('JSON parse failed, using fallback roadmap:', parseError);
@@ -947,77 +947,79 @@ Generate a Deep Golden Path roadmap with 3 Phases, each with 3-5 Micro-Actions. 
     // Elegant fallback roadmap (Deep Structure)
     return {
       success: true,
-      roadmap_title: 'Your First Bold Steps',
-      actions: [
-        {
-          title: 'Phase 1: The Inner Foundation',
-          description: 'Before we build outwardly, we must anchor inwardly. This phase is about clarity and permission.',
-          why_it_matters: rootMotivation || 'Because every enduring creation needs a solid spiritual foundation.',
-          duration_minutes: 20,
-          gabby_tip: 'Do not rush this. The energy you bring to the start shapes the entire journey.',
-          category: 'reflection',
-          order_index: 0,
-          sub_steps: [
-            {
-              title: 'Create your sacred space',
-              description: 'Clear a small physical space to be your "Dream Station". Even a corner of a desk works.',
-              duration_minutes: 5,
-            },
-            {
-              title: 'Draft the Permission Slip',
-              description: 'Write "I hereby give myself permission to..." and finish the sentence with your dream.',
-              duration_minutes: 5,
-            },
-            {
-              title: 'Visualize the end',
-              description: 'Close your eyes. See yourself having already achieved the dream. What is the first thing you do?',
-              duration_minutes: 10,
-            }
-          ]
-        },
-        {
-          title: 'Phase 2: Gathering Inspiration',
-          description: 'Now we look outward for evidence of possibility. We are hunting for proof.',
-          why_it_matters: 'Proof of possibility rewires the brain to see the path.',
-          duration_minutes: 25,
-          gabby_tip: 'Look for feelings, not just facts. Follow what lights you up.',
-          category: 'research',
-          order_index: 1,
-          sub_steps: [
-            {
-              title: 'Find three expanders',
-              description: 'Identify 3 people who have done what you want to do. Save their names.',
-              duration_minutes: 10,
-            },
-            {
-              title: 'Curate a digital moodboard',
-              description: 'Save 5 images that capture the *feeling* of your dream accomplished.',
-              duration_minutes: 15,
-            }
-          ]
-        },
-        {
-          title: 'Phase 3: The First Motion',
-          description: 'Action breaks the seal of hesitation. We take the smallest real-world step.',
-          why_it_matters: 'Momentum is the antidote to fear.',
-          duration_minutes: 15,
-          gabby_tip: 'It does not have to be perfect. It just has to be done.',
-          category: 'action',
-          order_index: 2,
-          sub_steps: [
-            {
-              title: 'The 5-minute brain dump',
-              description: 'Set a timer. Write down every single task you *think* you need to do. Get it all out.',
-              duration_minutes: 5,
-            },
-            {
-              title: 'Pick one tiny win',
-              description: 'Circle one item from your list that takes less than 2 minutes. Do it now.',
-              duration_minutes: 10,
-            }
-          ]
-        }
-      ],
+      roadmap: {
+        roadmap_title: 'Your First Bold Steps',
+        actions: [
+          {
+            title: 'Phase 1: The Inner Foundation',
+            description: 'Before we build outwardly, we must anchor inwardly. This phase is about clarity and permission.',
+            why_it_matters: rootMotivation || 'Because every enduring creation needs a solid spiritual foundation.',
+            duration_minutes: 20,
+            gabby_tip: 'Do not rush this. The energy you bring to the start shapes the entire journey.',
+            category: 'reflection',
+            order_index: 0,
+            sub_steps: [
+              {
+                title: 'Create your sacred space',
+                description: 'Clear a small physical space to be your "Dream Station". Even a corner of a desk works.',
+                duration_minutes: 5,
+              },
+              {
+                title: 'Draft the Permission Slip',
+                description: 'Write "I hereby give myself permission to..." and finish the sentence with your dream.',
+                duration_minutes: 5,
+              },
+              {
+                title: 'Visualize the end',
+                description: 'Close your eyes. See yourself having already achieved the dream. What is the first thing you do?',
+                duration_minutes: 10,
+              }
+            ]
+          },
+          {
+            title: 'Phase 2: Gathering Inspiration',
+            description: 'Now we look outward for evidence of possibility. We are hunting for proof.',
+            why_it_matters: 'Proof of possibility rewires the brain to see the path.',
+            duration_minutes: 25,
+            gabby_tip: 'Look for feelings, not just facts. Follow what lights you up.',
+            category: 'research',
+            order_index: 1,
+            sub_steps: [
+              {
+                title: 'Find three expanders',
+                description: 'Identify 3 people who have done what you want to do. Save their names.',
+                duration_minutes: 10,
+              },
+              {
+                title: 'Curate a digital moodboard',
+                description: 'Save 5 images that capture the *feeling* of your dream accomplished.',
+                duration_minutes: 15,
+              }
+            ]
+          },
+          {
+            title: 'Phase 3: The First Motion',
+            description: 'Action breaks the seal of hesitation. We take the smallest real-world step.',
+            why_it_matters: 'Momentum is the antidote to fear.',
+            duration_minutes: 15,
+            gabby_tip: 'It does not have to be perfect. It just has to be done.',
+            category: 'action',
+            order_index: 2,
+            sub_steps: [
+              {
+                title: 'The 5-minute brain dump',
+                description: 'Set a timer. Write down every single task you *think* you need to do. Get it all out.',
+                duration_minutes: 5,
+              },
+              {
+                title: 'Pick one tiny win',
+                description: 'Circle one item from your list that takes less than 2 minutes. Do it now.',
+                duration_minutes: 10,
+              }
+            ]
+          }
+        ],
+      }
     };
   } catch (error) {
     console.error('Roadmap generation error:', error);
@@ -1175,7 +1177,7 @@ DIFFICULT ACTION THAT FEELS TOO BIG:
 
 USER'S DREAM: "${dream}"${motivationContext}
 
-YOUR TASK: Break this into 2-3 EVEN SMALLER micro-actions that:
+YOUR TASK: Break this into 2-3 EVEN SMALLER steps that:
 1. Together accomplish the same goal as the original action
 2. Each take 5-10 minutes max (shorter than the original)
 3. Feel less intimidating and more approachable

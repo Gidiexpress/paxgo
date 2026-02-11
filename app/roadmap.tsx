@@ -343,7 +343,7 @@ export default function RoadmapScreen() {
         {/* Timeline with actions */}
         <View style={styles.timelineSection}>
           <View style={styles.timelineHeader}>
-            <Text style={styles.sectionTitle}>Your Micro-Actions</Text>
+            <Text style={styles.sectionTitle}>Your Path</Text>
           </View>
 
           <View style={styles.timelineContainer}>

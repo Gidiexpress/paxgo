@@ -187,11 +187,11 @@ export function FocusModeModal({
                         colors={[colors.boldTerracotta, colors.terracottaDark]}
                         style={styles.avatarGradient}
                       >
-                        <Text style={styles.avatarText}>G</Text>
+                        <Text style={styles.avatarText}>✨</Text>
                       </LinearGradient>
                     </View>
                     <View style={styles.tipHeaderText}>
-                      <Text style={styles.tipName}>Gabby&apos;s Tip</Text>
+                      <Text style={styles.tipName}>Coach&apos;s Insight</Text>
                       <Text style={styles.tipSubtitle}>How to do this with grace</Text>
                     </View>
                   </View>
