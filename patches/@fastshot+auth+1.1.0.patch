@@ -1,0 +1,13 @@
+diff --git a/node_modules/@fastshot/auth/src/constants.ts b/node_modules/@fastshot/auth/src/constants.ts
+index dd1c21d..d623328 100644
+--- a/node_modules/@fastshot/auth/src/constants.ts
++++ b/node_modules/@fastshot/auth/src/constants.ts
+@@ -16,7 +16,7 @@ export const AUTH_CONFIG = {
+     return ENV.PROJECT_ID;
+   },
+   /** Deep link scheme for OAuth callback */
+-  DEEP_LINK_SCHEME: 'fastshot',
++  DEEP_LINK_SCHEME: 'paxgo',
+   /** Callback path for OAuth */
+   CALLBACK_PATH: 'auth/callback',
+ } as const;
