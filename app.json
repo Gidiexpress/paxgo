@@ -40,6 +40,16 @@
           "icon": "./assets/images/icon.png",
           "color": "#D4AF37"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleJvmArgs": [
+              "-Xmx4096m"
+            ]
+          }
+        }
       ]
     ],
     "experiments": {
