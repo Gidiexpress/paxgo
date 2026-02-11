@@ -51,7 +51,6 @@ The AI engine decomposes high-level goals into a nested structure:
 A convention-based authentication bridge between Expo and Supabase, supporting:
 
 - Email/Password
-- Google & Apple OAuth
 - Deep-link redirection (`paxgo://auth/callback`)
 
 ### 4.3 Roadmap Context (`contexts/RoadmapContext.tsx`)
