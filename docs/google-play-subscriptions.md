@@ -41,7 +41,8 @@ A "Subscription" in Google Play is just a container. You must add a **Base Plan*
     * Select **Monthly** or **Yearly** based on which product you are editing.
 5. **Price**:
     * Click **Set prices**.
-    * Select all regions and enter your desired price (e.g., $9.99).
+    * Select all regions.
+    * Enter your price: **$5.00** for monthly / **$45.00** for yearly.
     * Click **Update** > **Save**.
 6. **Activate**: Click the **Activate** button next to the Base Plan.
 

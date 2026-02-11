@@ -30,12 +30,14 @@ PaxGo is not just another todo list; it’s a **Coaching-as-a-Service** platform
 - **Core Coaching**: Access to the "Five Whys" introductory dialogue.
 - **Hype Feed**: View and share wins with the community.
 
-### 5.2 PaxGo Premium (Monthly/Yearly)
+### 5.2 PaxGo Premium
 
+- **Monthly**: $5 (Low-friction entry).
+- **Yearly**: $45 (Over 25% savings).
 - **Unlimited Dreams**: Create multiple roadmaps concurrently.
 - **AI Refinement**: Ask the AI to "Refine" or "Break Down Further" any specific step.
 - **Advanced Insights**: Deep analytics on consistency and streak impact.
-- **Custom Personas**: Unique AI coach tones (Firm, Nurturing, Minimalist).
+- **Custom Personas**: Unique AI coach tones.
 
 ## 6. Competitive Advantage
 
