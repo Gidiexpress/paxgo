@@ -23,7 +23,7 @@ In the Play Console sidebar, go to **Monetize** > **Products**.
 3. **Product ID**:
     * For Monthly: Use `rc_monthly_pro`
     * For Yearly: Use `rc_yearly_pro`
-    * *Note: These must exactly match the IDs we set in the RevenueCat dashboard.*
+    * *Note: These must exactly match the IDs set in RevenueCat.*
 4. **Name**: Enter a name (e.g., "PaxGo Pro Monthly").
 5. Click **Create**.
 
@@ -32,7 +32,10 @@ In the Play Console sidebar, go to **Monetize** > **Products**.
 A "Subscription" in Google Play is just a container. You must add a **Base Plan** for it to be purchasable.
 
 1. Inside your new subscription, scroll to **Base plans** and click **Add base plan**.
-2. **Base plan ID**: You can use `monthly-plan` or `yearly-plan`.
+2. **Base plan ID**:
+    * For Monthly: Use **`pro1m`**
+    * For Yearly: Use **`pro1yr`**
+    * *Note: These IDs must exactly match your RevenueCat configuration.*
 3. **Type**: Select **Auto-renewing**.
 4. **Billing period**:
     * Select **Monthly** or **Yearly** based on which product you are editing.
@@ -40,28 +43,17 @@ A "Subscription" in Google Play is just a container. You must add a **Base Plan*
     * Click **Set prices**.
     * Select all regions and enter your desired price (e.g., $9.99).
     * Click **Update** > **Save**.
-6. **Activate**: Click the **Activate** button next to the Base Plan. *It will not show up in the app until it is Active.*
-
-### **Part C: Add Free Trials (Optional)**
-
-If you want to offer a "7-day free trial":
-
-1. Inside the Base Plan, scroll to **Offers**.
-2. Click **Add offer**.
-3. Select your Base Plan.
-4. **Offer ID**: `free-trial`.
-5. **Eligibility**: "New Users".
-6. **Phases**: Add a phase with Type **Free trial** and duration **7 days**.
-7. **Activate** the offer.
+6. **Activate**: Click the **Activate** button next to the Base Plan.
 
 ---
 
 ## 3. Checklist for the Developer
 
 * [ ] Is the **Product ID** in Play Console identical to the one in RevenueCat?
+* [ ] Are the **Base Plan IDs** set to `pro1m` (monthly) and `pro1yr` (yearly)?
 * [ ] Is the **Base Plan** status set to **Active**?
-* [ ] Have you set up the **Service Account Key** in RevenueCat? (RevenueCat needs this to "talk" to Google to verify purchases).
-* [ ] **Wait**: Google Play can take 2-24 hours to "propagate" new products. If they don't show up immediately, it's usually just a Google delay.
+* [ ] Have you set up the **Service Account Key** in RevenueCat?
+* [ ] **Wait**: Google Play can take 2-24 hours to "propagate" new products.
 
 ---
 
