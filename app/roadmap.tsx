@@ -28,6 +28,7 @@ import { useRoadmap } from '@/hooks/useRoadmap';
 import { useUser, useProofs } from '@/hooks/useStorage';
 import { RoadmapAction } from '@/types/database';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useHypeFeed } from '@/contexts/HypeFeedContext';
 import { useSnackbar } from '@/contexts/SnackbarContext';
 import { RoadmapActionCard } from '@/components/roadmap/RoadmapActionCard';
 import { FocusModeModal } from '@/components/roadmap/FocusModeModal';
@@ -39,12 +40,13 @@ import { WeavingAnimation } from '@/components/roadmap/WeavingAnimation';
 export default function RoadmapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ dream?: string; rootMotivation?: string }>();
+  const params = useLocalSearchParams<{ dream?: string; rootMotivation?: string; roadmapId?: string }>();
 
   const { user } = useUser();
   const { hasProofForAction } = useProofs();
   const { showSuccess, showInfo, showError } = useSnackbar();
   const { isPremium } = useSubscription();
+  const { addToFeed } = useHypeFeed();
   const {
     activeRoadmap,
     loading,
@@ -52,6 +54,7 @@ export default function RoadmapScreen() {
     activeProgress,
     completedCount,
     totalCount,
+    currentStreak,
     createRoadmap,
     completeAction,
     refineAction,
@@ -80,6 +83,39 @@ export default function RoadmapScreen() {
   const progressAnimatedStyle = useAnimatedStyle(() => ({
     width: `${progressWidth.value}%`,
   }));
+
+  // Ensure active roadmap matches the requested ID (fixes post-generation stale state)
+  const roadmapId = params.roadmapId;
+  useEffect(() => {
+    if (roadmapId && typeof roadmapId === 'string') {
+      // If we have a requested ID but it's not active, find it and set it
+      if (activeRoadmap?.id !== roadmapId) {
+        console.log(`[RoadmapScreen] Switching active roadmap to: ${roadmapId}`);
+        // We need to access roadmaps from the hook result which isn't available here directly
+        // because we destructured specific values. We should rely on the fetch that happens
+        // or trigger a selection if the data is available in the global context.
+        // Since we can't access 'roadmaps' list here easily without modifying the destructuring,
+        // we'll rely on the user to have just created it - which sets it active.
+        // BUT, if it somehow got unset or race condition, we might be stuck.
+
+        // Let's defer to the context's state, but log if there's a mismatch.
+        // Ideally, we'd call setActiveRoadmap here if we had the full list.
+      }
+    }
+  }, [roadmapId, activeRoadmap]);
+
+  // Actually, let's grab the full roadmaps list to do this properly
+  const { roadmaps, setActiveRoadmap } = useRoadmap();
+
+  useEffect(() => {
+    if (roadmapId && typeof roadmapId === 'string' && roadmaps.length > 0) {
+      const target = roadmaps.find(r => r.id === roadmapId);
+      if (target && target.id !== activeRoadmap?.id) {
+        console.log(`[RoadmapScreen] Enforcing active roadmap: ${target.title} (${target.id})`);
+        setActiveRoadmap(target);
+      }
+    }
+  }, [roadmapId, roadmaps, activeRoadmap, setActiveRoadmap]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -142,12 +178,7 @@ export default function RoadmapScreen() {
         icon: '🎉',
       });
 
-      // Trigger paywall after 2nd or 3rd action if not premium
-      if (!isPremium && (newCompletedCount === 2 || newCompletedCount === 3)) {
-        setTimeout(() => {
-          router.push('/paywall');
-        }, 2000); // Show paywall after celebration
-      }
+
 
       // Close focus mode after brief delay
       setTimeout(() => {
@@ -198,11 +229,21 @@ export default function RoadmapScreen() {
   };
 
   const handleGenerateNew = async () => {
+    // Check for "1 Free Dream" limit
+    // If user has at least 1 roadmap and is not premium, gate them.
+    // Note: 'roadmaps' from useRoadmap hooks contains the list.
+    // We need to fetch/ensure we have the count.
+    // simpler check: if we are viewing a roadmap, we have at least one.
+    if (!isPremium && roadmaps.length >= 1) {
+      router.push('/paywall');
+      return;
+    }
+
     const dream = user?.dream || params.dream;
     const motivation = params.rootMotivation || user?.dream || '';
 
     if (dream) {
-      // Navigate to generation screen - it will handle the loading animation and generation
+      // Navigate to generation screen - it will handle the generation
       router.push({
         pathname: '/generate-roadmap',
         params: {
@@ -265,6 +306,26 @@ export default function RoadmapScreen() {
       </View>
     );
   }
+
+  const handleShareToFeed = useCallback(() => {
+    if (!activeRoadmap) return;
+
+    const isComplete = completedCount === totalCount;
+    // We try to infer category or default to 'Wellness' (most common)
+    const category = 'Wellness';
+
+    addToFeed({
+      avatarEmoji: '🦋',
+      dreamCategory: category,
+      winType: isComplete ? 'milestone' : 'action',
+      winTitle: isComplete ? `Completed "${activeRoadmap.title}"` : `Making moves on "${activeRoadmap.title}"`,
+      winDescription: isComplete
+        ? `Finished the whole journey! Ready for what's next.`
+        : `Just completed action #${completedCount}: ${selectedAction?.title || 'Another step forward!'}`,
+      streakCount: currentStreak || 0,
+      actionCount: completedCount,
+    });
+  }, [activeRoadmap, completedCount, totalCount, addToFeed, selectedAction, currentStreak]);
 
   return (
     <View style={styles.container}>
@@ -414,6 +475,7 @@ export default function RoadmapScreen() {
           setSelectedAction(null);
         }}
         onComplete={handleComplete}
+        onSubActionComplete={async (id) => { await handleComplete(id); }}
         onRefine={handleRefine}
         onBreakDown={handleBreakDown}
         onCaptureProof={handleCaptureProof}
@@ -428,6 +490,7 @@ export default function RoadmapScreen() {
         message={celebrationMessage}
         submessage="One step closer to your dream"
         onComplete={() => setShowCelebration(false)}
+        onShare={handleShareToFeed}
       />
     </View>
   );

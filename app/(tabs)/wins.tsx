@@ -387,7 +387,7 @@ export default function WinsScreen() {
           {/* Archive / Vault Link */}
           <TouchableOpacity
             style={[styles.archiveLink, !isPremium && styles.archiveLinkLocked]}
-            onPress={() => router.push(isPremium ? '/vault' : '/archive')}
+            onPress={() => router.push('/archive')}
             activeOpacity={0.9}
           >
             <View style={styles.archiveLinkContent}>

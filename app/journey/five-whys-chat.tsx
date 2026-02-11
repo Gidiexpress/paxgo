@@ -31,6 +31,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@fastshot/auth';
 import { useGroq } from '@/hooks/useGroq';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useRoadmap } from '@/hooks/useRoadmap';
 import { supabase } from '@/lib/supabase';
 import { Audio } from 'expo-av';
 import { useSnackbar } from '@/contexts/SnackbarContext';
@@ -633,8 +635,18 @@ Include a ✨ emoji. Be warm, sophisticated, neutral and professional.`;
     }
   };
 
+  const { isPremium } = useSubscription();
+  const { roadmaps } = useRoadmap();
+
   const handleContinue = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Check for "1 Free Dream" limit
+    // If user has at least 1 roadmap and is not premium, gate them.
+    if (!isPremium && roadmaps.length >= 1) {
+      router.push('/paywall');
+      return;
+    }
 
     try {
       // Store data for reference

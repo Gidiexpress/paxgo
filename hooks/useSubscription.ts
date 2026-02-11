@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import Purchases, { CustomerInfo } from 'react-native-purchases';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@fastshot/auth';
 import { REVENUECAT_CONFIG } from '@/constants/sub-config';
 import { Alert } from 'react-native';
@@ -13,6 +14,7 @@ export interface SubscriptionState {
   expiresAt?: string | null;
   customerInfo: CustomerInfo | null;
   isLoading: boolean;
+  isDeveloperOverride?: boolean;
 }
 
 const defaultSubscription: SubscriptionState = {
@@ -20,7 +22,10 @@ const defaultSubscription: SubscriptionState = {
   isActive: false,
   customerInfo: null,
   isLoading: true,
+  isDeveloperOverride: false,
 };
+
+const DEV_PREMIUM_KEY = 'paxgo_dev_premium_override';
 
 export function useSubscription() {
   const { user } = useAuth();
@@ -31,17 +36,41 @@ export function useSubscription() {
   const dailyAILimit = 3;
 
   // Check entitlement from CustomerInfo
-  const updateSubscriptionState = useCallback((customerInfo: CustomerInfo) => {
+  const updateSubscriptionState = useCallback(async (customerInfo: CustomerInfo) => {
     const entitlement = customerInfo.entitlements.active[REVENUECAT_CONFIG.entitlementId];
 
+    // Check developer override
+    const devOverride = await AsyncStorage.getItem(DEV_PREMIUM_KEY);
+    const isOverrideActive = devOverride === 'true';
+
     setSubscription({
-      tier: entitlement ? 'bold-adventurer' : 'seeker',
-      isActive: !!entitlement,
+      tier: (entitlement || isOverrideActive) ? 'bold-adventurer' : 'seeker',
+      isActive: !!entitlement || isOverrideActive,
       expiresAt: customerInfo.latestExpirationDate,
       customerInfo: customerInfo,
       isLoading: false,
+      isDeveloperOverride: isOverrideActive,
     });
   }, []);
+
+  // Toggle Developer Override
+  const toggleDeveloperOverride = async () => {
+    try {
+      const current = await AsyncStorage.getItem(DEV_PREMIUM_KEY);
+      const newValue = current === 'true' ? 'false' : 'true';
+      await AsyncStorage.setItem(DEV_PREMIUM_KEY, newValue);
+
+      // Force refresh state
+      if (subscription.customerInfo) {
+        updateSubscriptionState(subscription.customerInfo);
+      }
+
+      return newValue === 'true';
+    } catch (e) {
+      console.error('Failed to toggle dev override', e);
+      return false;
+    }
+  };
 
   // Initialize and listen for updates
   useEffect(() => {
@@ -60,7 +89,19 @@ export function useSubscription() {
         updateSubscriptionState(customerInfo);
       } catch (e) {
         console.error('Error fetching customer info:', e);
-        setSubscription(prev => ({ ...prev, isLoading: false }));
+        // Even on error, check for dev override
+        const devOverride = await AsyncStorage.getItem(DEV_PREMIUM_KEY);
+        if (devOverride === 'true') {
+          setSubscription(prev => ({
+            ...prev,
+            isActive: true,
+            tier: 'bold-adventurer',
+            isLoading: false,
+            isDeveloperOverride: true
+          }));
+        } else {
+          setSubscription(prev => ({ ...prev, isLoading: false }));
+        }
       }
     };
 
@@ -114,6 +155,7 @@ export function useSubscription() {
     isLoading: subscription.isLoading,
     isPremium,
     restorePermissions,
+    toggleDeveloperOverride,
     canAccessUnlimitedAI,
     canAccessHypeSquad,
     canAccessFullArchive,

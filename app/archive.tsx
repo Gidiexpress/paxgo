@@ -1,400 +1,386 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
-  SectionList,
+  Modal,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
+import { Image } from 'expo-image';
+import * as Haptics from 'expo-haptics';
 import { colors, typography, borderRadius, spacing, shadows } from '@/constants/theme';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { PermissionSlipCompact } from '@/components/DigitalPermissionSlip';
-import { usePermissionSlips, useActions, useProofs } from '@/hooks/useStorage';
-import { useSubscription } from '@/hooks/useSubscription';
-import { PermissionSlip, MicroAction, ProofEntry } from '@/types';
-import { getPermissionSlipStyle } from '@/services/aiService';
+import { useVaultData, VaultProof } from '@/hooks/useVaultData';
+import { useRoadmap } from '@/hooks/useRoadmap';
+import { SmokeBackground } from '@/components/vault/SmokeBackground';
+import { ProofCardVault } from '@/components/vault/ProofCardVault';
+import { SealingRitualAnimation } from '@/components/vault/SealingRitualAnimation';
+import { MilestoneTimeline } from '@/components/vault/MilestoneTimeline';
+import { CoreInsightCard } from '@/components/vault/CoreInsightCard';
+import { RoadmapAction } from '@/types/database';
 
-type ArchiveFilter = 'all' | 'slips' | 'actions' | 'proofs';
+const { width } = Dimensions.get('window');
 
-interface ArchiveItem {
-  id: string;
-  type: 'permission_slip' | 'action' | 'proof';
-  title: string;
-  subtitle?: string;
-  date: string;
-  icon: string;
-  data: PermissionSlip | MicroAction | ProofEntry;
-}
-
-// Filter Chip Component
-function FilterChip({
-  label,
-  active,
-  onPress,
-  count,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-  count: number;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.filterChip, active && styles.filterChipActive]}
-      onPress={onPress}
-    >
-      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-        {label}
-      </Text>
-      <View style={[styles.filterChipCount, active && styles.filterChipCountActive]}>
-        <Text style={[styles.filterChipCountText, active && styles.filterChipCountTextActive]}>
-          {count}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-// Archive Item Card
-function ArchiveItemCard({
-  item,
-  onPress,
-  index,
-}: {
-  item: ArchiveItem;
-  onPress: () => void;
-  index: number;
-}) {
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
-  return (
-    <Animated.View entering={FadeInDown.delay(index * 30).springify()}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
-        <Card style={styles.archiveItemCard}>
-          <View style={styles.archiveItemHeader}>
-            <View style={styles.archiveItemIcon}>
-              <Text style={styles.archiveItemIconText}>{item.icon}</Text>
-            </View>
-            <View style={styles.archiveItemInfo}>
-              <Text style={styles.archiveItemTitle} numberOfLines={1}>
-                {item.title}
-              </Text>
-              {item.subtitle && (
-                <Text style={styles.archiveItemSubtitle} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              )}
-            </View>
-            <View style={styles.archiveItemDate}>
-              <Text style={styles.archiveItemDateText}>{formatDate(item.date)}</Text>
-              <Badge
-                variant={
-                  item.type === 'permission_slip'
-                    ? 'gold'
-                    : item.type === 'action'
-                      ? 'default'
-                      : 'premium'
-                }
-                label={
-                  item.type === 'permission_slip'
-                    ? 'Slip'
-                    : item.type === 'action'
-                      ? 'Action'
-                      : 'Proof'
-                }
-              />
-            </View>
-          </View>
-        </Card>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-// Permission Slip Detail Card
-function PermissionSlipDetail({ slip }: { slip: PermissionSlip }) {
-  const style = getPermissionSlipStyle(slip.fear);
-
-  return (
-    <Card variant="premium" style={styles.detailCard}>
-      <PermissionSlipCompact slip={slip} style={style} />
-      <View style={styles.detailMeta}>
-        <Text style={styles.detailMetaLabel}>Created for fear:</Text>
-        <Text style={styles.detailMetaText}>&ldquo;{slip.fear}&rdquo;</Text>
-      </View>
-    </Card>
-  );
-}
+type VaultFilter = 'all' | 'actions' | 'insights' | 'milestones';
 
 export default function ArchiveScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isPremium, canAccessFullArchive } = useSubscription();
 
-  const { slips } = usePermissionSlips();
-  const { actions } = useActions();
-  const { proofs } = useProofs();
+  // Data Hooks
+  const { proofs, slips, loading: vaultLoading, refreshVault } = useVaultData();
+  const { roadmaps, globalCompletedCount } = useRoadmap();
 
-  const [filter, setFilter] = useState<ArchiveFilter>('all');
-  const [selectedItem, setSelectedItem] = useState<ArchiveItem | null>(null);
+  const [filter, setFilter] = useState<VaultFilter>('all');
+  const [selectedProof, setSelectedProof] = useState<VaultProof | null>(null);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
+  const [sealingProof, setSealingProof] = useState<VaultProof | null>(null);
 
-  // Transform data into archive items
-  const archiveItems = useMemo(() => {
-    const items: ArchiveItem[] = [];
+  // Refresh on mount
+  useEffect(() => {
+    refreshVault();
+  }, [refreshVault]);
 
-    // Add permission slips
-    slips.forEach((slip) => {
-      items.push({
-        id: `slip-${slip.id}`,
-        type: 'permission_slip',
-        title: slip.title,
-        subtitle: slip.signedBy,
-        date: slip.createdAt,
-        icon: '📜',
-        data: slip,
-      });
-    });
+  // Filter sealed proofs (assuming all in vault are sealed/completed)
+  const sealedProofs = useMemo(() => {
+    // For now, treat all fetched proofs as sealed since they are in the DB
+    return proofs;
+  }, [proofs]);
 
-    // Add completed actions
-    actions
-      .filter((a) => a.isCompleted)
-      .forEach((action) => {
-        items.push({
-          id: `action-${action.id}`,
-          type: 'action',
-          title: action.title,
-          subtitle: action.description,
-          date: action.completedAt || action.id,
-          icon: '✅',
-          data: action,
+  const filteredProofs = useMemo(() => {
+    if (filter === 'all') return sealedProofs;
+    // Map filter keys to proof_type logic if needed, or simple category
+    // Assuming proof types match roughly for now, or just show all for simplicity until refined
+    return sealedProofs;
+  }, [sealedProofs, filter]);
+
+  // Core insights from Permission Slips
+  const coreInsights = useMemo(() => {
+    // Transform slips to look like insights if needed for the component
+    return slips.slice(0, 3);
+  }, [slips]);
+
+  // Completed roadmap milestones (Actions)
+  const completedMilestones = useMemo(() => {
+    let allActions: RoadmapAction[] = [];
+    roadmaps.forEach(r => {
+      if (r.actions) {
+        allActions = [...allActions, ...r.actions];
+        r.actions.forEach(a => {
+          if (a.subActions) allActions = [...allActions, ...a.subActions];
         });
-      });
-
-    // Add proofs
-    proofs.forEach((proof) => {
-      items.push({
-        id: `proof-${proof.id}`,
-        type: 'proof',
-        title: proof.note,
-        subtitle: proof.hashtags.map((t) => `#${t}`).join(' '),
-        date: proof.createdAt,
-        icon: '📸',
-        data: proof,
-      });
+      }
     });
+    return allActions.filter(a => a.is_completed);
+  }, [roadmaps]);
 
-    // Sort by date (newest first)
-    items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const handleAddProof = () => {
+    router.push('/capture-proof');
+  };
 
-    return items;
-  }, [slips, actions, proofs]);
+  const handleProofPress = async (proof: VaultProof) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSelectedProof(proof);
+  };
 
-  // Filter items
-  const filteredItems = useMemo(() => {
-    if (filter === 'all') return archiveItems;
-    if (filter === 'slips') return archiveItems.filter((i) => i.type === 'permission_slip');
-    if (filter === 'actions') return archiveItems.filter((i) => i.type === 'action');
-    if (filter === 'proofs') return archiveItems.filter((i) => i.type === 'proof');
-    return archiveItems;
-  }, [archiveItems, filter]);
+  const handleFilterChange = async (newFilter: VaultFilter) => {
+    await Haptics.selectionAsync();
+    setFilter(newFilter);
+  };
 
-  // Group by month for sections
-  const groupedItems = useMemo(() => {
-    const groups: { [key: string]: ArchiveItem[] } = {};
-
-    filteredItems.forEach((item) => {
-      const date = new Date(item.date);
-      const key = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
-    });
-
-    return Object.entries(groups).map(([title, data]) => ({ title, data }));
-  }, [filteredItems]);
-
-  const counts = useMemo(
-    () => ({
-      all: archiveItems.length,
-      slips: archiveItems.filter((i) => i.type === 'permission_slip').length,
-      actions: archiveItems.filter((i) => i.type === 'action').length,
-      proofs: archiveItems.filter((i) => i.type === 'proof').length,
-    }),
-    [archiveItems]
-  );
-
-  // Define callbacks before any early returns to follow Rules of Hooks
-  const renderItem = useCallback(
-    ({ item, index }: { item: ArchiveItem; index: number }) => (
-      <ArchiveItemCard item={item} onPress={() => setSelectedItem(item)} index={index} />
-    ),
-    []
-  );
-
-  const renderSectionHeader = useCallback(
-    ({ section }: { section: { title: string } }) => (
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{section.title}</Text>
-      </View>
-    ),
-    []
-  );
-
-  // If not premium, show upgrade prompt
-  if (!canAccessFullArchive) {
+  if (vaultLoading) {
     return (
-      <View style={styles.container}>
-        <LinearGradient
-          colors={[colors.midnightNavy, '#0A2540']}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={[styles.premiumPrompt, { paddingTop: insets.top + spacing['3xl'] }]}>
-          <TouchableOpacity
-            style={[styles.closeButton, { top: insets.top + spacing.md }]}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.closeIcon}>✕</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.premiumEmoji}>📚</Text>
-          <Text style={styles.premiumTitle}>The Archive</Text>
-          <Text style={styles.premiumSubtitle}>
-            Your complete history of Permission Slips, Micro-Actions, and Proof
-            moments—beautifully organized by date and category.
-          </Text>
-
-          <View style={styles.premiumFeatures}>
-            <View style={styles.premiumFeature}>
-              <Text style={styles.featureIcon}>✓</Text>
-              <Text style={styles.featureText}>Browse all Permission Slips</Text>
-            </View>
-            <View style={styles.premiumFeature}>
-              <Text style={styles.featureIcon}>✓</Text>
-              <Text style={styles.featureText}>View completed Micro-Actions</Text>
-            </View>
-            <View style={styles.premiumFeature}>
-              <Text style={styles.featureIcon}>✓</Text>
-              <Text style={styles.featureText}>Filter by type and date</Text>
-            </View>
-            <View style={styles.premiumFeature}>
-              <Text style={styles.featureIcon}>✓</Text>
-              <Text style={styles.featureText}>Revisit your journey anytime</Text>
-            </View>
-          </View>
-
-          <Button
-            title="Unlock with Bold Adventurer"
-            onPress={() => router.push('/paywall')}
-            variant="gold"
-            size="lg"
-            style={styles.upgradeButton}
-          />
-        </View>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.champagneGold} />
       </View>
-    );
+    )
   }
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[colors.parchmentWhite, colors.warmCream]}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* Animated Smoke Background */}
+      <SmokeBackground />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.md }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Text style={styles.backIcon}>‹</Text>
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>The Archive</Text>
-          <Badge variant="premium" label="Premium" />
+          <Text style={styles.headerSubtitle}>Vault of Achievement</Text>
         </View>
-        <View style={styles.headerRight} />
+        <TouchableOpacity onPress={handleAddProof} style={styles.addButton}>
+          <Text style={styles.addIcon}>+</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Stats */}
-      <Animated.View entering={FadeIn} style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{counts.all}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{counts.slips}</Text>
-          <Text style={styles.statLabel}>Slips</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{counts.actions}</Text>
-          <Text style={styles.statLabel}>Actions</Text>
-        </View>
-        <View style={styles.statDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{counts.proofs}</Text>
-          <Text style={styles.statLabel}>Proofs</Text>
-        </View>
-      </Animated.View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + spacing['4xl'] },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Stats Overview */}
+        <Animated.View entering={FadeIn} style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{sealedProofs.length}</Text>
+            <Text style={styles.statLabel}>Sealed Wins</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{coreInsights.length}</Text>
+            <Text style={styles.statLabel}>Core Insights</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{completedMilestones.length}</Text>
+            <Text style={styles.statLabel}>Milestones</Text>
+          </View>
+        </Animated.View>
 
-      {/* Filters */}
-      <View style={styles.filtersContainer}>
-        <FlatList
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          data={[
-            { key: 'all', label: 'All', count: counts.all },
-            { key: 'slips', label: 'Slips', count: counts.slips },
-            { key: 'actions', label: 'Actions', count: counts.actions },
-            { key: 'proofs', label: 'Proofs', count: counts.proofs },
-          ]}
-          renderItem={({ item }) => (
-            <FilterChip
-              label={item.label}
-              count={item.count}
-              active={filter === item.key}
-              onPress={() => setFilter(item.key as ArchiveFilter)}
-            />
+        {/* Quick Access Sections */}
+        <Animated.View entering={FadeInDown.delay(100)} style={styles.quickAccessSection}>
+          <TouchableOpacity
+            style={styles.quickAccessCard}
+            onPress={() => setShowInsights(true)}
+          >
+            <LinearGradient
+              colors={['#D4AF37', '#B8952D']}
+              style={styles.quickAccessGradient}
+            >
+              <Text style={styles.quickAccessIcon}>💎</Text>
+              <Text style={styles.quickAccessTitle}>Core Insights</Text>
+              <Text style={styles.quickAccessSubtitle}>
+                {coreInsights.length} discoveries
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickAccessCard}
+            onPress={() => setShowTimeline(true)}
+          >
+            <LinearGradient
+              colors={['#2EC4B6', '#22A399']}
+              style={styles.quickAccessGradient}
+            >
+              <Text style={styles.quickAccessIcon}>🗺️</Text>
+              <Text style={styles.quickAccessTitle}>Timeline</Text>
+              <Text style={styles.quickAccessSubtitle}>
+                {completedMilestones.length} completed
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* Filter Tabs */}
+        <Animated.View entering={FadeInDown.delay(200)} style={styles.filterContainer}>
+          {(['all', 'actions', 'insights', 'milestones'] as VaultFilter[]).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterTab, filter === f && styles.filterTabActive]}
+              onPress={() => handleFilterChange(f)}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filter === f && styles.filterTabTextActive,
+                ]}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </Animated.View>
+
+        {/* Proof Wall - Masonry Grid */}
+        <Animated.View entering={FadeInDown.delay(300)} style={styles.proofWall}>
+          {filteredProofs.length > 0 ? (
+            <View style={styles.masonryGrid}>
+              {filteredProofs.map((proof, index) => (
+                <ProofCardVault
+                  key={proof.id}
+                  proof={proof}
+                  onPress={() => handleProofPress(proof)}
+                  index={index}
+                />
+              ))}
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🔒</Text>
+              <Text style={styles.emptyTitle}>Vault is Empty</Text>
+              <Text style={styles.emptyText}>
+                Your sealed achievements will appear here as you complete actions and secure
+                your wins.
+              </Text>
+              <TouchableOpacity style={styles.emptyButton} onPress={handleAddProof}>
+                <LinearGradient
+                  colors={['#2EC4B6', '#22A399']}
+                  style={styles.emptyButtonGradient}
+                >
+                  <Text style={styles.emptyButtonText}>Seal Your First Win</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           )}
-          keyExtractor={(item) => item.key}
-          contentContainerStyle={styles.filtersList}
-        />
-      </View>
+        </Animated.View>
+      </ScrollView>
 
-      {/* Archive List */}
-      {groupedItems.length > 0 ? (
-        <SectionList
-          sections={groupedItems}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: insets.bottom + spacing['2xl'] },
-          ]}
-          showsVerticalScrollIndicator={false}
-          stickySectionHeadersEnabled={false}
+      {/* Proof Detail Modal */}
+      {selectedProof && (
+        <Modal
+          visible={!!selectedProof}
+          animationType="fade"
+          transparent
+          onRequestClose={() => setSelectedProof(null)}
+        >
+          <BlurView intensity={95} tint="dark" style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              onPress={() => setSelectedProof(null)}
+              activeOpacity={1}
+            />
+            <Animated.View
+              entering={FadeIn}
+              style={[styles.proofDetailCard, { marginBottom: insets.bottom + spacing.xl }]}
+            >
+              {/* Image with category glow */}
+              {selectedProof.image_url && (
+                <View style={styles.proofImageContainer}>
+                  <Image
+                    source={{ uri: selectedProof.image_url }}
+                    style={styles.proofImage}
+                    contentFit="cover"
+                  />
+                  {/* Category glow overlay */}
+                  <View
+                    style={[
+                      styles.glowOverlay,
+                      {
+                        // Default teal glow, could map category if available in DB
+                        backgroundColor: colors.vibrantTeal + '30',
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+
+              <View style={styles.proofDetailContent}>
+
+                {/* Main note */}
+                <Text style={styles.proofNote}>{selectedProof.note}</Text>
+
+                {/* Hashtags */}
+                {selectedProof.hashtags && selectedProof.hashtags.length > 0 && (
+                  <View style={styles.hashtagsContainer}>
+                    {selectedProof.hashtags.map((tag, i) => (
+                      <View key={i} style={styles.hashtagBadge}>
+                        <Text style={styles.hashtagText}>#{tag}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Reactions (if any) */}
+                {selectedProof.reactions && selectedProof.reactions.length > 0 && (
+                  <View style={styles.hashtagsContainer}>
+                    {selectedProof.reactions.map((r, i) => (
+                      <Text key={i} style={{ fontSize: 20, marginRight: 8 }}>{r}</Text>
+                    ))}
+                  </View>
+                )}
+
+                {/* Sealed date */}
+                {selectedProof.created_at && (
+                  <View style={styles.sealedInfo}>
+                    <Text style={styles.sealedIcon}>🔒</Text>
+                    <Text style={styles.sealedText}>
+                      Sealed {new Date(selectedProof.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setSelectedProof(null)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          </BlurView>
+        </Modal>
+      )}
+
+      {/* Timeline Modal */}
+      <Modal
+        visible={showTimeline}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowTimeline(false)}
+      >
+        <MilestoneTimeline
+          milestones={completedMilestones}
+          onClose={() => setShowTimeline(false)}
         />
-      ) : (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyEmoji}>📭</Text>
-          <Text style={styles.emptyTitle}>No items yet</Text>
-          <Text style={styles.emptyText}>
-            Your Permission Slips, completed actions, and proofs will appear here.
-          </Text>
+      </Modal>
+
+      {/* Core Insights Modal */}
+      <Modal
+        visible={showInsights}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowInsights(false)}
+      >
+        <View style={styles.insightsModal}>
+          <LinearGradient
+            colors={['#1A1A2E', '#16213E']}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.insightsHeader, { paddingTop: insets.top + spacing.md }]}>
+            <Text style={styles.insightsTitle}>Core Insight Repository</Text>
+            <TouchableOpacity
+              onPress={() => setShowInsights(false)}
+              style={styles.insightsCloseButton}
+            >
+              <Text style={styles.insightsCloseText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView
+            contentContainerStyle={[
+              styles.insightsContent,
+              { paddingBottom: insets.bottom + spacing.xl },
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
+            {coreInsights.map((insight, index) => (
+              <CoreInsightCard key={insight.id} insight={insight} index={index} />
+            ))}
+          </ScrollView>
         </View>
+      </Modal>
+
+      {/* Sealing Ritual Animation */}
+      {sealingProof && (
+        <SealingRitualAnimation
+          proof={sealingProof}
+          onComplete={() => setSealingProof(null)}
+        />
       )}
     </View>
   );
@@ -403,7 +389,7 @@ export default function ArchiveScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.parchmentWhite,
+    backgroundColor: '#0A0A0A',
   },
   header: {
     flexDirection: 'row',
@@ -411,6 +397,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+    zIndex: 10,
   },
   backButton: {
     width: 40,
@@ -420,29 +407,53 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     fontSize: 32,
-    color: colors.midnightNavy,
+    color: colors.champagneGold,
     fontWeight: '300',
   },
   headerCenter: {
     alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
   },
   headerTitle: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize.xl,
-    color: colors.midnightNavy,
+    color: colors.champagneGold,
+    letterSpacing: 1,
   },
-  headerRight: {
+  headerSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(212, 175, 55, 0.6)',
+    marginTop: 2,
+  },
+  addButton: {
     width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.vibrantTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.glow,
+  },
+  addIcon: {
+    fontSize: 24,
+    color: colors.white,
+    fontWeight: '300',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
   statsContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.lg,
+    backgroundColor: 'rgba(26, 26, 46, 0.8)',
     borderRadius: borderRadius.xl,
-    padding: spacing.md,
-    ...shadows.md,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
   },
   statItem: {
     flex: 1,
@@ -451,229 +462,297 @@ const styles = StyleSheet.create({
   statNumber: {
     fontFamily: typography.fontFamily.heading,
     fontSize: typography.fontSize['2xl'],
-    color: colors.boldTerracotta,
+    color: colors.champagneGold,
   },
   statLabel: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.xs,
-    color: colors.gray500,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginTop: spacing.xs,
   },
   statDivider: {
     width: 1,
-    backgroundColor: colors.gray200,
+    backgroundColor: 'rgba(212, 175, 55, 0.2)',
     marginVertical: spacing.xs,
   },
-  filtersContainer: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  filtersList: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  filterChip: {
+  quickAccessSection: {
     flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  quickAccessCard: {
+    flex: 1,
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  quickAccessGradient: {
+    padding: spacing.lg,
     alignItems: 'center',
-    backgroundColor: colors.white,
+    minHeight: 120,
+    justifyContent: 'center',
+  },
+  quickAccessIcon: {
+    fontSize: 32,
+    marginBottom: spacing.sm,
+  },
+  quickAccessTitle: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+    marginBottom: 2,
+  },
+  quickAccessSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.7)',
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  filterTab: {
+    flex: 1,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     borderRadius: borderRadius.lg,
-    marginRight: spacing.sm,
-    ...shadows.sm,
-  },
-  filterChipActive: {
-    backgroundColor: colors.midnightNavy,
-  },
-  filterChipText: {
-    fontFamily: typography.fontFamily.bodyMedium,
-    fontSize: typography.fontSize.sm,
-    color: colors.midnightNavy,
-    marginRight: spacing.xs,
-  },
-  filterChipTextActive: {
-    color: colors.white,
-  },
-  filterChipCount: {
-    backgroundColor: colors.gray100,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 1,
-    borderRadius: borderRadius.sm,
-    minWidth: 20,
+    backgroundColor: 'rgba(26, 26, 46, 0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
     alignItems: 'center',
   },
-  filterChipCountActive: {
+  filterTabActive: {
     backgroundColor: colors.champagneGold,
+    borderColor: colors.champagneGold,
   },
-  filterChipCountText: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: 10,
-    color: colors.gray600,
-  },
-  filterChipCountTextActive: {
-    color: colors.midnightNavy,
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-  },
-  sectionHeader: {
-    paddingVertical: spacing.md,
-  },
-  sectionTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.base,
-    color: colors.gray500,
-  },
-  archiveItemCard: {
-    marginBottom: spacing.sm,
-  },
-  archiveItemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  archiveItemIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.warmCream,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  archiveItemIconText: {
-    fontSize: 18,
-  },
-  archiveItemInfo: {
-    flex: 1,
-  },
-  archiveItemTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.sm,
-    color: colors.midnightNavy,
-  },
-  archiveItemSubtitle: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
-    color: colors.gray500,
-    marginTop: 2,
-  },
-  archiveItemDate: {
-    alignItems: 'flex-end',
-  },
-  archiveItemDateText: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
-    color: colors.gray400,
-    marginBottom: 4,
-  },
-  detailCard: {
-    marginVertical: spacing.md,
-  },
-  detailMeta: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.gray100,
-  },
-  detailMetaLabel: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.xs,
-    color: colors.gray500,
-    marginBottom: 4,
-  },
-  detailMetaText: {
+  filterTabText: {
     fontFamily: typography.fontFamily.bodyMedium,
-    fontSize: typography.fontSize.sm,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  filterTabTextActive: {
+    fontFamily: typography.fontFamily.bodySemiBold,
     color: colors.midnightNavy,
-    fontStyle: 'italic',
+  },
+  proofWall: {
+    marginBottom: spacing.xl,
+  },
+  masonryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
   emptyState: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: spacing['4xl'],
     paddingHorizontal: spacing.xl,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: spacing.md,
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
-    fontFamily: typography.fontFamily.bodySemiBold,
-    fontSize: typography.fontSize.lg,
-    color: colors.midnightNavy,
-    marginBottom: spacing.xs,
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
+    color: colors.champagneGold,
+    marginBottom: spacing.sm,
   },
   emptyText: {
     fontFamily: typography.fontFamily.body,
     fontSize: typography.fontSize.sm,
-    color: colors.gray500,
+    color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
+    marginBottom: spacing.xl,
+    lineHeight: 22,
   },
-  // Premium prompt styles
-  premiumPrompt: {
-    flex: 1,
-    alignItems: 'center',
+  emptyButton: {
+    borderRadius: borderRadius.xl,
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  emptyButtonGradient: {
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
   },
-  closeButton: {
-    position: 'absolute',
-    right: spacing.lg,
+  emptyButtonText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  proofDetailCard: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: 'rgba(26, 26, 46, 0.95)',
+    borderRadius: borderRadius['2xl'],
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+  },
+  proofImageContainer: {
+    width: '100%',
+    height: 300,
+    position: 'relative',
+  },
+  proofImage: {
+    width: '100%',
+    height: '100%',
+  },
+  glowOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.3,
+  },
+  proofDetailContent: {
+    padding: spacing.xl,
+  },
+  aiCommentBubble: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(46, 196, 182, 0.1)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(46, 196, 182, 0.3)',
+  },
+  gabbyAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: colors.vibrantTeal,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  gabbyAvatarText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.sm,
+    color: colors.white,
+  },
+  aiCommentContent: {
+    flex: 1,
+  },
+  aiCommentLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
+    marginBottom: 4,
+  },
+  aiCommentText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 20,
+  },
+  proofNote: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.base,
+    color: colors.white,
+    lineHeight: 24,
+    marginBottom: spacing.lg,
+  },
+  voiceSummaryCard: {
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+  },
+  voiceSummaryLabel: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.champagneGold,
+    marginBottom: 4,
+  },
+  voiceSummaryText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 20,
+    fontStyle: 'italic',
+  },
+  hashtagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  hashtagBadge: {
+    backgroundColor: 'rgba(46, 196, 182, 0.2)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+  },
+  hashtagText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
+    fontSize: typography.fontSize.xs,
+    color: colors.vibrantTeal,
+  },
+  sealedInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(212, 175, 55, 0.2)',
+  },
+  sealedIcon: {
+    fontSize: 14,
+    marginRight: spacing.xs,
+  },
+  sealedText: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.xs,
+    color: 'rgba(255, 255, 255, 0.5)',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeIcon: {
-    color: colors.white,
+  closeButtonText: {
     fontSize: 16,
-  },
-  premiumEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.lg,
-    marginTop: spacing['4xl'],
-  },
-  premiumTitle: {
-    fontFamily: typography.fontFamily.heading,
-    fontSize: typography.fontSize['3xl'],
     color: colors.white,
-    textAlign: 'center',
-    marginBottom: spacing.md,
   },
-  premiumSubtitle: {
-    fontFamily: typography.fontFamily.body,
-    fontSize: typography.fontSize.base,
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    marginBottom: spacing['2xl'],
+  // Insights Modal
+  insightsModal: {
+    flex: 1,
   },
-  premiumFeatures: {
-    width: '100%',
-    marginBottom: spacing['2xl'],
-  },
-  premiumFeature: {
+  insightsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 175, 55, 0.2)',
   },
-  featureIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.vibrantTeal,
-    color: colors.white,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginRight: spacing.md,
-    fontWeight: 'bold',
-    fontSize: 14,
+  insightsTitle: {
+    fontFamily: typography.fontFamily.heading,
+    fontSize: typography.fontSize.xl,
+    color: colors.champagneGold,
   },
-  featureText: {
-    fontFamily: typography.fontFamily.body,
+  insightsCloseButton: {
+    padding: spacing.xs,
+  },
+  insightsCloseText: {
+    fontFamily: typography.fontFamily.bodySemiBold,
     fontSize: typography.fontSize.base,
-    color: colors.white,
+    color: colors.vibrantTeal,
   },
-  upgradeButton: {
-    width: '100%',
+  insightsContent: {
+    padding: spacing.xl,
   },
 });

@@ -33,7 +33,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
 
   const { user, updateUser } = useUser();
-  const { resetOnboarding } = useOnboarding();
+  // const { resetOnboarding } = useOnboarding();
   const { signOut, user: authUser } = useAuth();
 
   // Use roadmap hook for real data
@@ -69,7 +69,7 @@ export default function ProfileScreen() {
     fetchRoadmaps(); // Ensure fresh data
   }, [authUser?.id]); // Run when auth user is available
 
-  const { subscription, isPremium } = useSubscription();
+  const { subscription, isPremium, toggleDeveloperOverride } = useSubscription();
   const { unreadCount } = useBoostStore();
 
   // Notification hook
@@ -81,27 +81,11 @@ export default function ProfileScreen() {
   } = useNotifications(currentStreak);
 
   const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+  const [devTapCount, setDevTapCount] = useState(0);
 
   // const stuckPoint = stuckPoints.find((s) => s.id === user?.stuckPoint);
 
-  const handleResetOnboarding = async () => {
-    Alert.alert(
-      'Reset Profile',
-      'This will clear your data and restart the onboarding. Are you sure?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await resetOnboarding();
-            router.replace('/journey/stuck-point');
-          },
-        },
-      ]
-    );
-  };
+  // Reset functionality removed per user request
 
   const handleNewDream = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -456,32 +440,55 @@ export default function ProfileScreen() {
           >
             <Text style={styles.logoutButtonText}>Log Out</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.resetButton}
-            onPress={handleResetOnboarding}
-          >
-            <Text style={styles.resetButtonText}>Reset Profile & Start Over</Text>
-          </TouchableOpacity>
         </Animated.View>
 
-        {/* App Info */}
+        {/* App Info - Secret Dev Mode Trigger */}
         <Animated.View entering={FadeInDown.delay(600)} style={styles.appInfo}>
-          <Text style={styles.appName}>The Bold Move</Text>
-          <Text style={styles.appVersion}>Version 1.0.0</Text>
+          <Text style={styles.appName}>PaxGo</Text>
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => {
+              setDevTapCount(c => {
+                const newCount = c + 1;
+                if (newCount === 7) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  Alert.alert("👨‍💻 Developer Mode", "You can now toggle Premium status.");
+                }
+                return newCount;
+              });
+            }}
+          >
+            <Text style={styles.appVersion}>Version 1.0.0 {devTapCount >= 7 ? '⚡' : ''}</Text>
+          </TouchableOpacity>
           <Text style={styles.appTagline}>Make Your Move ✨</Text>
+
+          {devTapCount >= 7 && (
+            <TouchableOpacity
+              style={[styles.logoutButton, { marginTop: spacing.lg, backgroundColor: colors.midnightNavy }]}
+              onPress={async () => {
+                if (toggleDeveloperOverride) {
+                  const isActive = await toggleDeveloperOverride();
+                  Alert.alert("Dev Override", isActive ? "Premium FORCED: ON" : "Premium FORCED: OFF");
+                }
+              }}
+            >
+              <Text style={[styles.logoutButtonText, { color: colors.champagneGold }]}>
+                Toggle Premium Status
+              </Text>
+            </TouchableOpacity>
+          )}
         </Animated.View>
 
         <View style={{ height: 100 }} />
-      </ScrollView>
+      </ScrollView >
 
       {/* Notification Pre-Prompt Modal */}
-      <NotificationPrePrompt
+      < NotificationPrePrompt
         visible={showNotificationPrompt}
         onAllow={handleNotificationEnable}
         onNotNow={handleNotificationDismiss}
       />
-    </View>
+    </View >
   );
 }
 

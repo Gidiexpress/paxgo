@@ -211,6 +211,8 @@ export function RoadmapProvider({ children }: { children: React.ReactNode }) {
                             category: 'action'
                         }));
 
+                        console.log(`[createRoadmap] Inserting ${subStepsInsert.length} sub-steps for phase: ${phase.title}`);
+
                         const { data: subStepsData, error: subStepsError } = await supabase
                             .from('roadmap_actions')
                             .insert(subStepsInsert)
@@ -220,8 +222,11 @@ export function RoadmapProvider({ children }: { children: React.ReactNode }) {
                         if (subStepsError) throw subStepsError;
 
                         if (subStepsData) {
+                            console.log(`[createRoadmap] Successfully inserted sub-steps:`, subStepsData.length);
                             fullPhase.subActions = subStepsData as unknown as RoadmapAction[];
                         }
+                    } else {
+                        console.log(`[createRoadmap] No sub-steps found for phase: ${phase.title}`);
                     }
 
                     insertedActions.push(fullPhase);

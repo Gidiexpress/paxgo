@@ -23,6 +23,7 @@ import { SnackbarContainer } from '@/components/Snackbar';
 import Purchases from 'react-native-purchases';
 import { REVENUECAT_CONFIG } from '@/constants/sub-config';
 import { RoadmapProvider } from '@/contexts/RoadmapContext';
+import { HypeFeedProvider } from '@/contexts/HypeFeedContext';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -96,43 +97,45 @@ export default function RootLayout() {
         }}
       >
         <RoadmapProvider>
-          <SnackbarProvider>
-            <StatusBar style="dark" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                animation: 'slide_from_right',
-                contentStyle: { backgroundColor: colors.parchmentWhite },
-              }}
-            >
-              <Stack.Screen name="index" />
-              <Stack.Screen name="journey" />
+          <HypeFeedProvider>
+            <SnackbarProvider>
+              <StatusBar style="dark" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: 'slide_from_right',
+                  contentStyle: { backgroundColor: colors.parchmentWhite },
+                }}
+              >
+                <Stack.Screen name="index" />
+                <Stack.Screen name="journey" />
 
-              <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
-              <Stack.Screen
-                name="paywall"
-                options={{
-                  presentation: 'modal',
-                  animation: 'slide_from_bottom',
-                }}
-              />
-              <Stack.Screen
-                name="add-proof"
-                options={{
-                  presentation: 'modal',
-                  animation: 'slide_from_bottom',
-                }}
-              />
-              <Stack.Screen
-                name="add-action"
-                options={{
-                  presentation: 'modal',
-                  animation: 'slide_from_bottom',
-                }}
-              />
-            </Stack>
-            <SnackbarContainer />
-          </SnackbarProvider>
+                <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
+                <Stack.Screen
+                  name="paywall"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen
+                  name="add-proof"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+                <Stack.Screen
+                  name="add-action"
+                  options={{
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+              </Stack>
+              <SnackbarContainer />
+            </SnackbarProvider>
+          </HypeFeedProvider>
         </RoadmapProvider>
       </AuthProvider>
     </GestureHandlerRootView>

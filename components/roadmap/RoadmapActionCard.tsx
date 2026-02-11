@@ -43,7 +43,9 @@ export function RoadmapActionCard({
                 action={mappedAction}
                 onComplete={onComplete}
                 onPress={() => onPress(action)}
+                onDeepDive={() => onPress(action)} // Open modal on card click/'Do it now'
                 isLocked={isLocked}
+                hideQuickComplete={action.subActions && action.subActions.length > 0}
             />
         </Animated.View>
     );

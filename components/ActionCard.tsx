@@ -26,6 +26,7 @@ interface ActionCardProps {
   onDeepDive?: () => void;
   hasActiveDeepDive?: boolean;
   isLocked?: boolean;
+  hideQuickComplete?: boolean;
 }
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
@@ -37,6 +38,7 @@ export function ActionCard({
   onDeepDive,
   hasActiveDeepDive,
   isLocked,
+  ...props
 }: ActionCardProps) {
   const scale = useSharedValue(1);
   const glowOpacity = useSharedValue(0);
@@ -279,16 +281,20 @@ export function ActionCard({
                     </Animated.View>
                   </Pressable>
 
+
+
                   {/* Quick Complete with animation */}
-                  <Pressable
-                    onPress={handleComplete}
-                    onPressIn={handleQuickCompletePressIn}
-                    onPressOut={handleQuickCompletePressOut}
-                  >
-                    <Animated.View style={[styles.quickCompleteButton, quickCompleteStyle]}>
-                      <Text style={styles.quickCompleteText}>✓</Text>
-                    </Animated.View>
-                  </Pressable>
+                  {!props.hideQuickComplete && (
+                    <Pressable
+                      onPress={handleComplete}
+                      onPressIn={handleQuickCompletePressIn}
+                      onPressOut={handleQuickCompletePressOut}
+                    >
+                      <Animated.View style={[styles.quickCompleteButton, quickCompleteStyle]}>
+                        <Text style={styles.quickCompleteText}>✓</Text>
+                      </Animated.View>
+                    </Pressable>
+                  )}
                 </View>
               ) : (
                 <View style={styles.completedBadge}>
@@ -300,7 +306,7 @@ export function ActionCard({
           </View>
         </Card>
       </Animated.View>
-    </AnimatedPressable>
+    </AnimatedPressable >
   );
 }
 

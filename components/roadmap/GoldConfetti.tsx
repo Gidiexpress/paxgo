@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, Dimensions , Text } from 'react-native';
+import { View, StyleSheet, Dimensions, Text, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -226,6 +226,7 @@ interface CelebrationOverlayProps {
   message?: string;
   submessage?: string;
   onComplete?: () => void;
+  onShare?: () => void;
 }
 
 export function CelebrationOverlay({
@@ -233,9 +234,11 @@ export function CelebrationOverlay({
   message = 'Well done!',
   submessage = 'One step closer to your dream',
   onComplete,
+  onShare,
 }: CelebrationOverlayProps) {
   const textOpacity = useSharedValue(0);
   const textScale = useSharedValue(0.8);
+  const [hasShared, setHasShared] = React.useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -243,7 +246,8 @@ export function CelebrationOverlay({
         300,
         withSequence(
           withTiming(1, { duration: 400 }),
-          withDelay(1500, withTiming(0, { duration: 400 }))
+          // Keep visible longer if there is a share action
+          onShare ? withDelay(4000, withTiming(0, { duration: 400 })) : withDelay(1500, withTiming(0, { duration: 400 }))
         )
       );
 
@@ -252,31 +256,57 @@ export function CelebrationOverlay({
         withSequence(
           withSpring(1.1, { damping: 12 }),
           withSpring(1, { damping: 15 }),
-          withDelay(1500, withTiming(0.8, { duration: 300 }))
+          // Keep visible longer if there is a share action
+          onShare ? withDelay(4000, withTiming(0.8, { duration: 300 })) : withDelay(1500, withTiming(0.8, { duration: 300 }))
         )
       );
+    } else {
+      setHasShared(false);
     }
-  }, [visible]);
+  }, [visible, onShare]);
 
   const textAnimatedStyle = useAnimatedStyle(() => ({
     opacity: textOpacity.value,
     transform: [{ scale: textScale.value }],
   }));
 
+  const handleShare = () => {
+    if (onShare && !hasShared) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onShare();
+      setHasShared(true);
+    }
+  };
+
   if (!visible) return null;
 
   return (
-    <View style={styles.celebrationContainer} pointerEvents="none">
+    <View style={styles.celebrationContainer} pointerEvents="box-none">
       <GoldConfetti active={visible} onComplete={onComplete} count={50} />
 
       <Animated.View style={[styles.celebrationTextContainer, textAnimatedStyle]}>
         <LinearGradient
-          colors={['rgba(1,22,39,0.9)', 'rgba(1,22,39,0.85)']}
+          colors={['rgba(1,22,39,0.95)', 'rgba(1,22,39,0.9)']}
           style={styles.celebrationBg}
         >
           <Text style={styles.celebrationEmoji}>✨</Text>
           <Text style={styles.celebrationMessage}>{message}</Text>
           <Text style={styles.celebrationSubmessage}>{submessage}</Text>
+
+          {onShare && (
+            <TouchableOpacity
+              style={[
+                styles.shareButton,
+                hasShared && styles.shareButtonDisabled
+              ]}
+              onPress={handleShare}
+              disabled={hasShared}
+            >
+              <Text style={styles.shareButtonText}>
+                {hasShared ? 'Shared to Hype Feed! 🚀' : 'Share to Hype Feed 🌍'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
       </Animated.View>
     </View>
@@ -345,6 +375,7 @@ const styles = StyleSheet.create({
   celebrationTextContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2000,
   },
   celebrationBg: {
     paddingHorizontal: 40,
@@ -368,5 +399,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  shareButton: {
+    marginTop: 16,
+    backgroundColor: colors.boldTerracotta,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  shareButtonDisabled: {
+    backgroundColor: colors.gray600,
+    opacity: 0.8,
+  },
+  shareButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 14,
+    color: colors.white,
   },
 });

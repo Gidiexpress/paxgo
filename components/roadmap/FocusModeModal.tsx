@@ -71,6 +71,7 @@ export function FocusModeModal({
   const [justCompletedId, setJustCompletedId] = useState<string | null>(null);
   const [showMiniConfetti, setShowMiniConfetti] = useState(false);
   const [localSnackbar, setLocalSnackbar] = useState<SnackbarConfig | null>(null);
+  const [optimisticCompletedIds, setOptimisticCompletedIds] = useState<Set<string>>(new Set());
 
   if (!action) return null;
 
@@ -78,7 +79,7 @@ export function FocusModeModal({
 
   // Check if all sub-actions are completed (for Option B logic)
   const hasIncompleteSubActions = action.subActions && action.subActions.length > 0 &&
-    action.subActions.some(sa => !sa.is_completed);
+    action.subActions.some(sa => !sa.is_completed && !optimisticCompletedIds.has(sa.id));
 
   const handleComplete = async () => {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -206,13 +207,13 @@ export function FocusModeModal({
                     <Text style={styles.subActionsIcon}>✓</Text>
                     <Text style={styles.subActionsTitle}>Small Steps to Complete</Text>
                     <Text style={styles.subActionsProgress}>
-                      {action.subActions?.filter(sa => sa.is_completed).length || 0}/{action.subActions?.length || 0}
+                      {action.subActions?.filter(sa => sa.is_completed || optimisticCompletedIds.has(sa.id)).length || 0}/{action.subActions?.length || 0}
                     </Text>
                   </View>
 
                   {action.subActions?.map((subAction, index) => {
                     const isExpanded = expandedSubActionId === subAction.id;
-                    const isCompleted = subAction.is_completed;
+                    const isCompleted = subAction.is_completed || optimisticCompletedIds.has(subAction.id);
                     const isJustCompleted = justCompletedId === subAction.id;
 
                     return (
@@ -274,6 +275,9 @@ export function FocusModeModal({
                             <TouchableOpacity
                               onPress={async () => {
                                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+                                // Optimistic update
+                                setOptimisticCompletedIds(prev => new Set(prev).add(subAction.id));
                                 setJustCompletedId(subAction.id);
                                 setExpandedSubActionId(null);
 
