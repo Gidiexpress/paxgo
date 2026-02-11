@@ -22,5 +22,9 @@ A narrative journey of how the project was built, challenges faced, and lessons 
 
 Official legal document for Play Store compliance.
 
+### [Google Play Subscriptions](./google-play-subscriptions.md)
+
+Step-by-step guide for setting up revenue and products in the Play Console.
+
 ---
 *Built with ❤️ for PaxGo*
