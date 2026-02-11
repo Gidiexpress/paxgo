@@ -8,8 +8,7 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native generated directories
-android/
+# android/
 ios/
 .expo/
 
