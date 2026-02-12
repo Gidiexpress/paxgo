@@ -30,5 +30,9 @@ Step-by-step guide for setting up revenue and products in the Play Console.
 
 How to link Google Play to RevenueCat using a JSON credentials key.
 
+### [RevenueCat Troubleshooting](./rc-troubleshooting.md)
+
+Fixing "Product not found" and other common Play Store payment issues.
+
 ---
 *Built with ❤️ for PaxGo*
