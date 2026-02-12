@@ -49,7 +49,16 @@ export default function DreamInputScreen() {
   useEffect(() => {
     // Load stuck point
     AsyncStorage.getItem('@boldmove_stuck_point').then((value) => {
-      if (value) setStuckPoint(value);
+      if (value) {
+        try {
+          // The stuck point is stored as a JSON object in stuck-point.tsx
+          const parsed = JSON.parse(value);
+          setStuckPoint(parsed.id || 'travel');
+        } catch (e) {
+          // Fallback for legacy plain strings
+          setStuckPoint(value);
+        }
+      }
     });
 
     // Auto-focus input

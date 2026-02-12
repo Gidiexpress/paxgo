@@ -189,7 +189,7 @@ export default function StuckPointScreen() {
             <View style={styles.stepDot} />
           </View>
 
-          <Text style={styles.title}>The Hub</Text>
+          <Text style={styles.title}>Identify Your Goal</Text>
           <Text style={styles.subtitle}>
             Choose your path. Every great journey begins with a bold move.
           </Text>
